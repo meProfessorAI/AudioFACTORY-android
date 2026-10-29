@@ -1,0 +1,6 @@
+{
+  "name": "Audio Factory",
+  "description": "Production-grade Android application wrapper for Audio Factory AI Voice & Audio Studio, featuring multi-speaker generation, audio recording, safe file upload/download, and offline recovery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,28 @@
+<resources>
+    <string name="app_name">Audio Factory</string>
+    <string name="title_offline">No Internet Connection</string>
+    <string name="desc_offline">Audio Factory requires an internet connection to generate, clone, and export studio-grade audio. Please check your network.</string>
+    <string name="title_error">Unable to Connect</string>
+    <string name="desc_error">We encountered a problem loading Audio Factory. Please try reloading or checking your network settings.</string>
+    <string name="btn_retry">Retry Connection</string>
+    <string name="btn_back">Go Back</string>
+    <string name="btn_open_network">Network Settings</string>
+    <string name="desc_loading">Connecting to Audio Factory Studio…</string>
+    <string name="dialog_exit_title">Exit Audio Factory?</string>
+    <string name="dialog_exit_message">Are you sure you want to exit? Any unsaved voice or script edits in progress may be lost.</string>
+    <string name="action_exit">Exit</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_reload">Reload</string>
+    <string name="action_share">Share Studio Link</string>
+    <string name="action_privacy">Privacy Policy</string>
+    <string name="action_about">About Audio Factory</string>
+    <string name="action_clear_cache">Clear Studio Cache</string>
+    <string name="cache_cleared_message">Audio Factory cache cleared</string>
+    <string name="download_started">Audio download started…</string>
+    <string name="download_completed">Audio downloaded successfully to Downloads folder.</string>
+    <string name="download_failed">Audio download failed. Please check storage permissions.</string>
+    <string name="permission_audio_title">Microphone Access</string>
+    <string name="permission_audio_desc">Audio Factory needs access to your microphone to record voice samples for instant AI voice cloning and speech synthesis.</string>
+    <string name="permission_grant">Allow</string>
+    <string name="permission_deny">Not Now</string>
+</resources>

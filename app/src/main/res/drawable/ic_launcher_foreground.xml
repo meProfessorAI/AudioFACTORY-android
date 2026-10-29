@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Studio Rounded Plate -->
+    <path
+        android:fillColor="#1E2330"
+        android:pathData="M32,24h44c6.63,0 12,5.37 12,12v36c0,6.63 -5.37,12 -12,12h-44c-6.63,0 -12,-5.37 -12,-12v-36c0,-6.63 5.37,-12 12,-12z" />
+
+    <!-- Equalizer Bar 1 (Blue) -->
+    <path
+        android:fillColor="#4285F4"
+        android:pathData="M33,44h5c1.66,0 3,1.34 3,3v14c0,1.66 -1.34,3 -3,3h-5c-1.66,0 -3,-1.34 -3,-3v-14c0,-1.66 1.34,-3 3,-3z" />
+
+    <!-- Equalizer Bar 2 (Sky Blue) -->
+    <path
+        android:fillColor="#60A5FA"
+        android:pathData="M42,36h5c1.66,0 3,1.34 3,3v30c0,1.66 -1.34,3 -3,3h-5c-1.66,0 -3,-1.34 -3,-3v-30c0,-1.66 1.34,-3 3,-3z" />
+
+    <!-- Equalizer Bar 3 (Indigo) -->
+    <path
+        android:fillColor="#818CF8"
+        android:pathData="M51,28h5c1.66,0 3,1.34 3,3v46c0,1.66 -1.34,3 -3,3h-5c-1.66,0 -3,-1.34 -3,-3v-46c0,-1.66 1.34,-3 3,-3z" />
+
+    <!-- Equalizer Bar 4 (Purple) -->
+    <path
+        android:fillColor="#A855F7"
+        android:pathData="M60,34h5c1.66,0 3,1.34 3,3v34c0,1.66 -1.34,3 -3,3h-5c-1.66,0 -3,-1.34 -3,-3v-34c0,-1.66 1.34,-3 3,-3z" />
+
+    <!-- Equalizer Bar 5 (Green) -->
+    <path
+        android:fillColor="#34A853"
+        android:pathData="M69,43h5c1.66,0 3,1.34 3,3v16c0,1.66 -1.34,3 -3,3h-5c-1.66,0 -3,-1.34 -3,-3v-16c0,-1.66 1.34,-3 3,-3z" />
+</vector>
