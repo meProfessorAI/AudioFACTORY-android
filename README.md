@@ -79,3 +79,33 @@ For Google Play production uploads, configure your signing credentials via envir
 - `KEYSTORE_PATH`: Path to your `.jks` release keystore
 - `STORE_PASSWORD`: Keystore password
 - `KEY_PASSWORD`: Key alias password
+
+---
+
+## 4. GitHub Actions CI/CD Automation
+
+Two automated GitHub Actions workflows are included in `.github/workflows/`:
+
+### 1. Build Workflow (`.github/workflows/build.yml`)
+- **Triggers**: On push or pull request to `main`/`master`, or via manual trigger (`workflow_dispatch`).
+- **Jobs**:
+  - Sets up JDK 21 and Gradle cache.
+  - Executes unit and Robolectric tests (`./gradlew testDebugUnitTest`).
+  - Assembles Debug APK (`./gradlew assembleDebug`).
+  - Packages Android App Bundle (`./gradlew bundleDebug` or `./gradlew bundleRelease`).
+  - Publishes `audio-factory-debug-apk` and `audio-factory-app-bundle` as downloadable build artifacts (retained for 30 days).
+
+### 2. Release Workflow (`.github/workflows/release.yml`)
+- **Triggers**: When pushing tags starting with `v*` (e.g. `v1.0.0`) or via manual trigger.
+- **Jobs**:
+  - Compiles the APK and production AAB.
+  - Generates SHA256 integrity checksums.
+  - Publishes a formal GitHub Release with downloadable APK and AAB attachments.
+
+### GitHub Repository Secrets (Optional for Production Release Signing)
+To enable production signed `.aab` bundles in GitHub Actions, configure these repository secrets under **Settings > Secrets and variables > Actions**:
+- `KEYSTORE_BASE64`: Base64 string of your `.jks` or `.keystore` file (`base64 -w 0 my-upload-key.jks`).
+- `STORE_PASSWORD`: Password for the keystore.
+- `KEY_PASSWORD`: Password for the key alias.
+*(If secrets are not provided, the workflows automatically build and package signed debug bundles without failing).*
+

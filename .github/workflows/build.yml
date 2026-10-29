@@ -1,0 +1,101 @@
+name: Build Debug APK & App Bundle
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      build_release_bundle:
+        description: 'Attempt Release Bundle build if signing secrets exist'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Android Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure gradlew Executable
+        run: chmod +x ./gradlew
+
+      - name: Run Unit & Robolectric Tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Build Android App Bundle (AAB)
+        run: ./gradlew bundleDebug --stacktrace
+
+      - name: Build Release Bundle (Optional if Keystore Configured)
+        if: ${{ inputs.build_release_bundle == true || env.HAS_KEYSTORE == 'true' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          HAS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.STORE_PASSWORD != '' }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Decoding release keystore..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+            export KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+            ./gradlew bundleRelease --stacktrace
+            echo "Release bundle built successfully."
+          else
+            echo "No release keystore secret found. Skipping bundleRelease."
+          fi
+
+      - name: Verify Generated Outputs
+        run: |
+          echo "### Build Artifacts Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact Type | File Path | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            APK_SIZE=$(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)
+            echo "| Debug APK | `app-debug.apk` | $APK_SIZE |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          find app/build/outputs/bundle -name "*.aab" | while read -r aab_file; do
+            AAB_NAME=$(basename "$aab_file")
+            AAB_SIZE=$(du -h "$aab_file" | cut -f1)
+            echo "| App Bundle | `$AAB_NAME` | $AAB_SIZE |" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-factory-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Android App Bundle (AAB) Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-factory-app-bundle
+          path: app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error
+          retention-days: 30

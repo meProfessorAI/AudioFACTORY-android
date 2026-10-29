@@ -1,0 +1,102 @@
+name: Release APK & App Bundle
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag or Version for Release (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  release:
+    name: Generate Release Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure gradlew Executable
+        run: chmod +x ./gradlew
+
+      - name: Prepare Signing Keystore
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Using repository secret KEYSTORE_BASE64 for production release signing..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+            echo "keystore_path=$RUNNER_TEMP/release.jks" >> $GITHUB_OUTPUT
+            echo "has_release_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "No production keystore provided. Building signed debug bundle fallback..."
+            echo "has_release_key=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Android Packages
+        env:
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # Build APK
+          ./gradlew assembleDebug --stacktrace
+          
+          # Build AAB Bundle
+          if [ "${{ steps.keystore.outputs.has_release_key }}" = "true" ]; then
+            ./gradlew bundleRelease --stacktrace
+          else
+            ./gradlew bundleDebug --stacktrace
+          fi
+
+      - name: Organize Artifacts
+        run: |
+          mkdir -p release_dist
+          
+          # Copy Debug APK
+          cp app/build/outputs/apk/debug/app-debug.apk release_dist/AudioFactory-debug.apk
+          
+          # Copy Bundle (.aab)
+          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then
+            cp app/build/outputs/bundle/release/app-release.aab release_dist/AudioFactory-release.aab
+          else
+            cp app/build/outputs/bundle/debug/app-debug.aab release_dist/AudioFactory-debug.aab
+          fi
+          
+          # Generate SHA256 Checksums
+          cd release_dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || inputs.tag_name != ''
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag_name }}
+          name: "Audio Factory ${{ github.ref_name || inputs.tag_name }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release_dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
