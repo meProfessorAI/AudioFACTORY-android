@@ -1,20 +1,27 @@
-name: Release APK & App Bundle
+name: Audio Factory Release Pipeline
 
 on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag or Version for Release (e.g. v1.0.0)'
-        required: true
-        default: 'v1.0.0'
+        description: 'Tag or Version for Release (e.g. v1.1.0)'
+        required: false
+        default: 'v1.1.0'
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Generate Release Artifacts
+    name: Build & Publish Release V1.1.0
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
 
@@ -34,82 +41,183 @@ jobs:
       - name: Ensure gradlew Executable
         run: chmod +x ./gradlew
 
-      - name: Restore Debug Keystore
-        run: |
-          if [ -f debug.keystore.base64 ]; then
-            echo "Restoring debug.keystore from debug.keystore.base64..."
-            base64 -d debug.keystore.base64 > debug.keystore
-          elif [ ! -f debug.keystore ]; then
-            echo "Generating fallback debug.keystore..."
-            keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          ls -la debug.keystore
-
       - name: Setup Environment Configuration
         run: |
           if [ ! -f .env ] && [ -f .env.example ]; then
             cp .env.example .env
           fi
 
-      - name: Prepare Signing Keystore
-        id: keystore
+      - name: Restore & Validate Release Signing Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Using repository secret KEYSTORE_BASE64 for production release signing..."
-            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
-            echo "keystore_path=$RUNNER_TEMP/release.jks" >> $GITHUB_OUTPUT
-            echo "has_release_key=true" >> $GITHUB_OUTPUT
-          else
-            echo "No production keystore provided. Building signed debug bundle fallback..."
-            echo "has_release_key=false" >> $GITHUB_OUTPUT
+          set +x
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::CRITICAL: Required release signing secrets (KEYSTORE_BASE64, STORE_PASSWORD, KEY_PASSWORD) are missing in GitHub repository settings."
+            echo "Production release pipeline cannot proceed without official signing credentials."
+            exit 1
           fi
 
-      - name: Build Android Packages
+          echo "Decoding release keystore into secure runner path..."
+          KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_FILE"
+          chmod 600 "$KEYSTORE_FILE"
+
+          if [ ! -s "$KEYSTORE_FILE" ]; then
+            echo "::error::CRITICAL: Decoded release keystore is empty or invalid."
+            exit 1
+          fi
+
+          echo "Release keystore restored successfully at $KEYSTORE_FILE"
+
+      - name: Run Unit Tests
         env:
-          KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
+          KEYSTORE_PATH: ${{ runner.temp }}/release.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          ./gradlew assembleDebug --stacktrace
-          
-          if [ "${{ steps.keystore.outputs.has_release_key }}" = "true" ]; then
-            ./gradlew bundleRelease --stacktrace
-          else
-            ./gradlew bundleDebug --stacktrace
-          fi
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'upload' }}
+        run: ./gradlew testDebugUnitTest --stacktrace
 
-      - name: Organize Artifacts
+      - name: Build Release APK & App Bundle
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'upload' }}
+        run: |
+          ./gradlew clean --stacktrace
+          ./gradlew assembleRelease --stacktrace
+          ./gradlew bundleRelease --stacktrace
+
+      - name: Stage & Verify Versioned Artifacts
         run: |
           mkdir -p release_dist
-          
-          find app/build/outputs/apk -name "*.apk" -type f -exec cp -v {} release_dist/AudioFactory-debug.apk \; 2>/dev/null || true
-          
-          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then
-            cp -v app/build/outputs/bundle/release/app-release.aab release_dist/AudioFactory-release.aab
-          elif [ -f app/build/outputs/bundle/debug/app-debug.aab ]; then
-            cp -v app/build/outputs/bundle/debug/app-debug.aab release_dist/AudioFactory-debug.aab
-          else
-            find app/build/outputs/bundle -name "*.aab" -type f -exec cp -v {} release_dist/AudioFactory.aab \; 2>/dev/null || true
+
+          RAW_APK="app/build/outputs/apk/release/app-release.apk"
+          RAW_AAB="app/build/outputs/bundle/release/app-release.aab"
+
+          if [ ! -s "$RAW_APK" ]; then
+            echo "::error::CRITICAL: Release APK build output missing or zero bytes."
+            exit 1
           fi
-          
+
+          if [ ! -s "$RAW_AAB" ]; then
+            echo "::error::CRITICAL: Release AAB build output missing or zero bytes."
+            exit 1
+          fi
+
+          TARGET_APK="release_dist/AudioFactory-V1.1.0.apk"
+          TARGET_AAB="release_dist/AudioFactory-V1.1.0.aab"
+
+          cp -v "$RAW_APK" "$TARGET_APK"
+          cp -v "$RAW_AAB" "$TARGET_AAB"
+
+          echo "=== Staged Release Files ==="
+          ls -lh release_dist/
+
+      - name: Verify APK & AAB Signatures and Metadata
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          APKSIGNER=$(find "$SDK_ROOT/build-tools" -name "apksigner" | sort -V | tail -n 1)
+          AAPT=$(find "$SDK_ROOT/build-tools" -name "aapt" | sort -V | tail -n 1)
+
+          TARGET_APK="release_dist/AudioFactory-V1.1.0.apk"
+          TARGET_AAB="release_dist/AudioFactory-V1.1.0.aab"
+
+          echo "Using apksigner at: $APKSIGNER"
+          echo "Using aapt at: $AAPT"
+
+          echo "--- 1. Verifying APK Signature ---"
+          "$APKSIGNER" verify --verbose "$TARGET_APK"
+
+          echo "--- 2. Verifying AAB Signature ---"
+          jarsigner -verify "$TARGET_AAB"
+
+          echo "--- 3. Verifying Package Metadata ---"
+          BADGING=$("$AAPT" dump badging "$TARGET_APK")
+          echo "$BADGING" | grep -E "package: name="
+
+          echo "$BADGING" | grep "com.audiofactory.app" || {
+            echo "::error::Package ID mismatch! Expected com.audiofactory.app"
+            exit 1
+          }
+
+          echo "$BADGING" | grep "versionCode='2'" || {
+            echo "::error::Version code mismatch! Expected versionCode='2'"
+            exit 1
+          }
+
+          echo "$BADGING" | grep "versionName='1.1.0'" || {
+            echo "::error::Version name mismatch! Expected versionName='1.1.0'"
+            exit 1
+          }
+
+          echo "All artifact signature and metadata checks passed successfully."
+
+      - name: Generate Checksums
+        run: |
           cd release_dist
-          sha256sum * > SHA256SUMS.txt
+          sha256sum AudioFactory-V1.1.0.apk AudioFactory-V1.1.0.aab > SHA256SUMS.txt
+          echo "=== SHA256 Checksums ==="
           cat SHA256SUMS.txt
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || inputs.tag_name != ''
+      - name: Upload Release Artifacts to Workflow
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name || inputs.tag_name }}
-          name: "Audio Factory ${{ github.ref_name || inputs.tag_name }}"
+          name: audio-factory-v1.1.0-release
+          path: release_dist/*
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release' || inputs.tag_name != ''
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag_name || 'v1.1.0' }}
+          name: "Audio Factory V1.1.0"
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
+          body: |
+            ## Audio Factory V1.1.0 Production Release
+
+            Official native Android client release for **Audio Factory** (`https://audiofactory.vercel.app`).
+
+            ### Package Information
+            - **Application ID**: `com.audiofactory.app`
+            - **Version Name**: `1.1.0`
+            - **Version Code**: `2`
+            - **Target SDK**: API 36 (Android 16)
+            - **Minimum SDK**: API 24 (Android 7.0)
+
+            ### Included Release Assets
+            - **`AudioFactory-V1.1.0.apk`**: Standalone signed Android Application Package for direct side-loading and installation.
+            - **`AudioFactory-V1.1.0.aab`**: Signed Android App Bundle for Google Play Console submission.
+            - **`SHA256SUMS.txt`**: Cryptographic integrity checksums for release artifact verification.
+
+            ### Installation Guidance (APK)
+            1. Download `AudioFactory-V1.1.0.apk` to your Android device.
+            2. Open the file and allow installation from unknown sources if prompted.
+            3. Launch Audio Factory to access AI voice cloning, multi-speaker synthesis, and audio exports.
+
+            ### Google Play Upload Guidance (AAB)
+            1. Log in to [Google Play Console](https://play.google.com/console).
+            2. Select **Audio Factory** (`com.audiofactory.app`).
+            3. Navigate to **Testing > Production** (or Internal Testing).
+            4. Upload `AudioFactory-V1.1.0.aab` and complete the rollout.
           files: |
-            release_dist/*
+            release_dist/AudioFactory-V1.1.0.apk
+            release_dist/AudioFactory-V1.1.0.aab
+            release_dist/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean Up Temporary Signing Material
+        if: always()
+        run: |
+          set +x
+          rm -f "${{ runner.temp }}/release.jks"
+          echo "Temporary release keystore removed safely from runner."

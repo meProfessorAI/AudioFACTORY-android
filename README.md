@@ -9,12 +9,15 @@ Production-quality native Android client wrapping and integrating with the live 
 | Attribute | Value |
 | :--- | :--- |
 | **Application Name** | Audio Factory |
+| **Release Version** | 1.1.0 |
+| **Version Code** | 2 |
 | **Namespace** | `com.audiofactory.app` |
 | **Application ID** | `com.audiofactory.app` |
 | **Production Target URL** | `https://audiofactory.vercel.app` |
 | **Minimum SDK** | API 24 (Android 7.0 Nougat) |
 | **Target SDK** | API 36 (Android 16) |
 | **UI Framework** | Jetpack Compose + Material Design 3 |
+| **JDK Version** | Java 21 |
 | **Rendering Engine** | Android WebView with strict origin confinement |
 | **Architecture** | MVVM / Unidirectional State Flow with lifecycle awareness |
 
@@ -62,50 +65,47 @@ The application is structured into isolated, maintainable components:
 
 ---
 
-## 3. Building & Releasing
+## 3. Building & Releasing Locally
 
 ### Debug Build
 ```bash
-gradle :app:assembleDebug
+./gradlew assembleDebug
 ```
 
-### Release Android App Bundle (.aab)
+### Production Release Build (APK & AAB)
 ```bash
-gradle :app:bundleRelease
-```
+export KEYSTORE_PATH="/path/to/upload-keystore.jks"
+export STORE_PASSWORD="your-store-password"
+export KEY_PASSWORD="your-key-password"
+export KEY_ALIAS="upload"
 
-### Keystore Configuration
-For Google Play production uploads, configure your signing credentials via environment variables:
-- `KEYSTORE_PATH`: Path to your `.jks` release keystore
-- `STORE_PASSWORD`: Keystore password
-- `KEY_PASSWORD`: Key alias password
+./gradlew assembleRelease bundleRelease --stacktrace
+```
 
 ---
 
-## 4. GitHub Actions CI/CD Automation
+## 4. GitHub Actions CI/CD Pipeline
 
-Two automated GitHub Actions workflows are included in `.github/workflows/`:
+Two automated GitHub Actions workflows are configured in `.github/workflows/`:
 
-### 1. Build Workflow (`.github/workflows/build.yml`)
-- **Triggers**: On push or pull request to `main`/`master`, or via manual trigger (`workflow_dispatch`).
-- **Jobs**:
-  - Sets up JDK 21 and Gradle cache.
-  - Executes unit and Robolectric tests (`./gradlew testDebugUnitTest`).
-  - Assembles Debug APK (`./gradlew assembleDebug`).
-  - Packages Android App Bundle (`./gradlew bundleDebug` or `./gradlew bundleRelease`).
-  - Publishes `audio-factory-debug-apk` and `audio-factory-app-bundle` as downloadable build artifacts (retained for 30 days).
+### 1. CI Validation Workflow (`.github/workflows/build.yml`)
+- **Triggers**: On pull request or push to `main`/`master`.
+- **Function**: Executes unit tests, compiles debug APK, and validates code integrity. Never uses production release signing secrets.
 
-### 2. Release Workflow (`.github/workflows/release.yml`)
-- **Triggers**: When pushing tags starting with `v*` (e.g. `v1.0.0`) or via manual trigger.
-- **Jobs**:
-  - Compiles the APK and production AAB.
-  - Generates SHA256 integrity checksums.
-  - Publishes a formal GitHub Release with downloadable APK and AAB attachments.
+### 2. Release Pipeline Workflow (`.github/workflows/release.yml`)
+- **Triggers**: On pushing version tags (`v*`), release publication, or via manual `workflow_dispatch`.
+- **Function**:
+  - Restores and verifies `KEYSTORE_BASE64` signing material.
+  - Executes unit tests.
+  - Builds production `AudioFactory-V1.1.0.apk` and `AudioFactory-V1.1.0.aab`.
+  - Performs `apksigner` and `jarsigner` signature verification.
+  - Verifies package metadata (`com.audiofactory.app`, `versionCode=2`, `versionName=1.1.0`) via `aapt`.
+  - Generates `SHA256SUMS.txt`.
+  - Automatically publishes a GitHub Release with versioned artifacts and installation/upload instructions.
+  - Cleans up temporary signing files from the runner in an `always()` step.
 
-### GitHub Repository Secrets (Optional for Production Release Signing)
-To enable production signed `.aab` bundles in GitHub Actions, configure these repository secrets under **Settings > Secrets and variables > Actions**:
-- `KEYSTORE_BASE64`: Base64 string of your `.jks` or `.keystore` file (`base64 -w 0 my-upload-key.jks`).
-- `STORE_PASSWORD`: Password for the keystore.
-- `KEY_PASSWORD`: Password for the key alias.
-*(If secrets are not provided, the workflows automatically build and package signed debug bundles without failing).*
-
+### Configured GitHub Repository Secrets
+- `KEYSTORE_BASE64`: Base64-encoded JKS signing keystore.
+- `STORE_PASSWORD`: Keystore password.
+- `KEY_PASSWORD`: Private key password.
+- `KEY_ALIAS`: Key alias (`"upload"`).

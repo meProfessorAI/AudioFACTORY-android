@@ -1,42 +1,37 @@
-# Audio Factory — Privacy & Release Readiness Checklist
+# Audio Factory V1.1.0 — Privacy & Release Readiness Checklist
 
-This document tracks all pre-release verifications for publishing Audio Factory on Google Play.
+This document tracks pre-release verifications for publishing Audio Factory V1.1.0 (versionCode 2) on Google Play.
 
 ---
 
-## 1. Google Play Policy Compliance
+## 1. Google Play Policy & Version Verification
 
-- [x] **App Title Compliance**: `Audio Factory` is 13 characters (< 30 characters), no prohibited words (e.g. "Free", "Best", "#1").
-- [x] **Zero-Permission Media & Storage**: No broad storage permissions (`READ_EXTERNAL_STORAGE` or `MANAGE_EXTERNAL_STORAGE`). Scoped storage and system file pickers are used exclusively.
+- [x] **Package ID & Namespace**: `com.audiofactory.app`
+- [x] **Version Name**: `1.1.0`
+- [x] **Version Code**: `2`
+- [x] **App Title Compliance**: `Audio Factory` (13 characters, no promotional claims or emojis).
+- [x] **Zero-Permission Media & Storage**: No `READ_EXTERNAL_STORAGE` or `MANAGE_EXTERNAL_STORAGE`. Modern Scoped Storage and system file pickers are used exclusively.
 - [x] **HTTPS Enforcement**: Network security config strictly disables cleartext traffic (`cleartextTrafficPermitted="false"`).
-- [x] **Origin Isolation**: Navigation is restricted to trusted first-party domains (`audiofactory.vercel.app`, `audiofactory.app`).
-- [x] **SSL / TLS Integrity**: SSL error handlers cancel connections upon certificate anomalies; no certificate bypass.
-- [x] **Sensitive Permission Safeguard**: Microphone (`RECORD_AUDIO`) is gated behind user rationale dialog and only granted when the user explicitly triggers voice recording.
-- [x] **Target SDK**: Configured for `targetSdk = 36` (Android 16), compliant with latest Google Play API requirements.
-- [x] **No Dynamic Code Loading**: No external `.dex`, `.jar`, or remote scripts loaded outside sandboxed WebView context.
+- [x] **Origin Isolation**: Navigation restricted to first-party origins (`audiofactory.vercel.app`, `audiofactory.app`).
+- [x] **SSL / TLS Integrity**: SSL error handler cancels connections upon any certificate anomaly.
+- [x] **Microphone Rationale**: `RECORD_AUDIO` gated behind contextual dialog before requesting system permissions.
+- [x] **Target SDK**: Configured for `targetSdk = 36` (Android 16), compliant with Google Play Console mandates.
 
 ---
 
 ## 2. Technical Quality & Robustness
 
-- [x] **Back Navigation**: Hardware back button pops WebView navigation stack before prompting the exit confirmation dialog.
-- [x] **State Persistence & Reconnection**: Real-time network callback detects offline events and triggers auto-reconnect on recovery.
-- [x] **File Chooser Callbacks**: All file chooser cancellations return `null` to `filePathCallback` to prevent UI freezing.
-- [x] **Renderer Crash Handling**: `onRenderProcessGone` handled safely, preventing native crashes if web rendering engine runs out of memory.
-- [x] **Resource Cleanup**: Proper lifecycle teardown of WebView instances, receivers, and callback listeners in `onDestroy`.
-- [x] **Adaptive Launcher Icon**: Custom high-resolution vector and raster icons configured across all density buckets (`mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`) plus circular masks.
+- [x] **Back Navigation**: Hardware back button pops WebView navigation stack before showing exit confirmation.
+- [x] **State Persistence**: Network observer detects connectivity loss and triggers automatic reconnection upon recovery.
+- [x] **File Chooser Safety**: WebChromeClient cancellations return null callbacks to prevent UI thread locks.
+- [x] **Renderer Crash Recovery**: `onRenderProcessGone` handles web process crashes without killing the native app.
+- [x] **Signature Verification**: Both `AudioFactory-V1.1.0.apk` and `AudioFactory-V1.1.0.aab` verified with `apksigner` and `jarsigner`.
+- [x] **Checksum Integrity**: SHA256 checksums generated and attached to release assets.
 
 ---
 
-## 3. Production Keystore Setup (Google Play Console)
+## 3. GitHub Actions Release Automation
 
-To generate the final `.aab` for production upload:
-```bash
-export KEYSTORE_PATH="/path/to/your/upload-keystore.jks"
-export STORE_PASSWORD="your-keystore-password"
-export KEY_PASSWORD="your-key-password"
-
-gradle :app:bundleRelease
-```
-The resulting upload artifact will be located at:
-`app/build/outputs/bundle/release/app-release.aab`
+- [x] **Secrets Configured**: `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`, `KEY_ALIAS`.
+- [x] **Keystore Security**: Decoded to `$RUNNER_TEMP/release.jks` with `chmod 600` and purged in `always()` cleanup step.
+- [x] **Release Workflow**: `.github/workflows/release.yml` triggers on tag `v*` and automatically creates GitHub Releases.

@@ -16,3 +16,12 @@
 local.properties
 .env
 debug.keystore
+
+# Signing material security exclusions
+*.jks
+*.keystore
+*.base64
+keystore.properties
+/signing/
+/release_dist/
+/staged-artifacts/
