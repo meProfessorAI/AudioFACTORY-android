@@ -21,7 +21,7 @@ jobs:
   release:
     name: Build & Publish Release V1.1.0
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     permissions:
       contents: write
 
@@ -40,6 +40,16 @@ jobs:
 
       - name: Ensure gradlew Executable
         run: chmod +x ./gradlew
+
+      - name: Restore Debug Keystore
+        run: |
+          if [ -f debug.keystore.base64 ]; then
+            echo "Restoring debug.keystore from debug.keystore.base64..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f debug.keystore ]; then
+            echo "Generating fallback debug.keystore..."
+            keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
       - name: Setup Environment Configuration
         run: |
@@ -81,7 +91,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'upload' }}
         run: ./gradlew testDebugUnitTest --stacktrace
 
-      - name: Build Release APK & App Bundle
+      - name: Build Debug & Release Packages (APK and AAB)
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/release.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
@@ -89,55 +99,70 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'upload' }}
         run: |
           ./gradlew clean --stacktrace
-          ./gradlew assembleRelease --stacktrace
-          ./gradlew bundleRelease --stacktrace
+          ./gradlew assembleDebug bundleDebug assembleRelease bundleRelease --stacktrace
 
-      - name: Stage & Verify Versioned Artifacts
+      - name: Stage & Verify Artifacts (Debug & Release)
         run: |
           mkdir -p release_dist
 
-          RAW_APK="app/build/outputs/apk/release/app-release.apk"
-          RAW_AAB="app/build/outputs/bundle/release/app-release.aab"
+          RAW_DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
+          RAW_DEBUG_AAB="app/build/outputs/bundle/debug/app-debug.aab"
+          RAW_RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          RAW_RELEASE_AAB="app/build/outputs/bundle/release/app-release.aab"
 
-          if [ ! -s "$RAW_APK" ]; then
+          if [ ! -s "$RAW_DEBUG_APK" ]; then
+            echo "::error::CRITICAL: Debug APK build output missing or zero bytes."
+            exit 1
+          fi
+
+          if [ ! -s "$RAW_DEBUG_AAB" ]; then
+            echo "::error::CRITICAL: Debug AAB build output missing or zero bytes."
+            exit 1
+          fi
+
+          if [ ! -s "$RAW_RELEASE_APK" ]; then
             echo "::error::CRITICAL: Release APK build output missing or zero bytes."
             exit 1
           fi
 
-          if [ ! -s "$RAW_AAB" ]; then
+          if [ ! -s "$RAW_RELEASE_AAB" ]; then
             echo "::error::CRITICAL: Release AAB build output missing or zero bytes."
             exit 1
           fi
 
-          TARGET_APK="release_dist/AudioFactory-V1.1.0.apk"
-          TARGET_AAB="release_dist/AudioFactory-V1.1.0.aab"
+          TARGET_DEBUG_APK="release_dist/AudioFactory-V1.1.0-debug.apk"
+          TARGET_DEBUG_AAB="release_dist/AudioFactory-V1.1.0-debug.aab"
+          TARGET_RELEASE_APK="release_dist/AudioFactory-V1.1.0.apk"
+          TARGET_RELEASE_AAB="release_dist/AudioFactory-V1.1.0.aab"
 
-          cp -v "$RAW_APK" "$TARGET_APK"
-          cp -v "$RAW_AAB" "$TARGET_AAB"
+          cp -v "$RAW_DEBUG_APK" "$TARGET_DEBUG_APK"
+          cp -v "$RAW_DEBUG_AAB" "$TARGET_DEBUG_AAB"
+          cp -v "$RAW_RELEASE_APK" "$TARGET_RELEASE_APK"
+          cp -v "$RAW_RELEASE_AAB" "$TARGET_RELEASE_AAB"
 
-          echo "=== Staged Release Files ==="
+          echo "=== Staged Debug & Release Artifacts ==="
           ls -lh release_dist/
 
-      - name: Verify APK & AAB Signatures and Metadata
+      - name: Verify Release Signatures and Metadata
         run: |
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           APKSIGNER=$(find "$SDK_ROOT/build-tools" -name "apksigner" | sort -V | tail -n 1)
           AAPT=$(find "$SDK_ROOT/build-tools" -name "aapt" | sort -V | tail -n 1)
 
-          TARGET_APK="release_dist/AudioFactory-V1.1.0.apk"
-          TARGET_AAB="release_dist/AudioFactory-V1.1.0.aab"
+          TARGET_RELEASE_APK="release_dist/AudioFactory-V1.1.0.apk"
+          TARGET_RELEASE_AAB="release_dist/AudioFactory-V1.1.0.aab"
 
           echo "Using apksigner at: $APKSIGNER"
           echo "Using aapt at: $AAPT"
 
-          echo "--- 1. Verifying APK Signature ---"
-          "$APKSIGNER" verify --verbose "$TARGET_APK"
+          echo "--- 1. Verifying Release APK Signature ---"
+          "$APKSIGNER" verify --verbose "$TARGET_RELEASE_APK"
 
-          echo "--- 2. Verifying AAB Signature ---"
-          jarsigner -verify "$TARGET_AAB"
+          echo "--- 2. Verifying Release AAB Signature ---"
+          jarsigner -verify "$TARGET_RELEASE_AAB"
 
           echo "--- 3. Verifying Package Metadata ---"
-          BADGING=$("$AAPT" dump badging "$TARGET_APK")
+          BADGING=$("$AAPT" dump badging "$TARGET_RELEASE_APK")
           echo "$BADGING" | grep -E "package: name="
 
           echo "$BADGING" | grep "com.audiofactory.app" || {
@@ -155,19 +180,19 @@ jobs:
             exit 1
           }
 
-          echo "All artifact signature and metadata checks passed successfully."
+          echo "All release artifact signature and metadata checks passed successfully."
 
       - name: Generate Checksums
         run: |
           cd release_dist
-          sha256sum AudioFactory-V1.1.0.apk AudioFactory-V1.1.0.aab > SHA256SUMS.txt
+          sha256sum AudioFactory-V1.1.0-debug.apk AudioFactory-V1.1.0-debug.aab AudioFactory-V1.1.0.apk AudioFactory-V1.1.0.aab > SHA256SUMS.txt
           echo "=== SHA256 Checksums ==="
           cat SHA256SUMS.txt
 
-      - name: Upload Release Artifacts to Workflow
+      - name: Upload Release & Debug Artifacts to Workflow
         uses: actions/upload-artifact@v4
         with:
-          name: audio-factory-v1.1.0-release
+          name: audio-factory-v1.1.0-all-artifacts
           path: release_dist/*
           if-no-files-found: error
           retention-days: 90
@@ -194,12 +219,14 @@ jobs:
             - **Minimum SDK**: API 24 (Android 7.0)
 
             ### Included Release Assets
-            - **`AudioFactory-V1.1.0.apk`**: Standalone signed Android Application Package for direct side-loading and installation.
-            - **`AudioFactory-V1.1.0.aab`**: Signed Android App Bundle for Google Play Console submission.
-            - **`SHA256SUMS.txt`**: Cryptographic integrity checksums for release artifact verification.
+            - **`AudioFactory-V1.1.0.apk`**: Production signed Android Application Package for direct side-loading and testing.
+            - **`AudioFactory-V1.1.0.aab`**: Production signed Android App Bundle for Google Play Console submission.
+            - **`AudioFactory-V1.1.0-debug.apk`**: Debug signed Android Application Package.
+            - **`AudioFactory-V1.1.0-debug.aab`**: Debug signed Android App Bundle.
+            - **`SHA256SUMS.txt`**: Cryptographic integrity checksums for all four build artifacts.
 
             ### Installation Guidance (APK)
-            1. Download `AudioFactory-V1.1.0.apk` to your Android device.
+            1. Download `AudioFactory-V1.1.0.apk` (or `AudioFactory-V1.1.0-debug.apk` for development) to your Android device.
             2. Open the file and allow installation from unknown sources if prompted.
             3. Launch Audio Factory to access AI voice cloning, multi-speaker synthesis, and audio exports.
 
@@ -211,6 +238,8 @@ jobs:
           files: |
             release_dist/AudioFactory-V1.1.0.apk
             release_dist/AudioFactory-V1.1.0.aab
+            release_dist/AudioFactory-V1.1.0-debug.apk
+            release_dist/AudioFactory-V1.1.0-debug.aab
             release_dist/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

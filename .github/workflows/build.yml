@@ -54,18 +54,31 @@ jobs:
       - name: Run Unit & Robolectric Tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Build Debug APK & Debug AAB
+        run: ./gradlew assembleDebug bundleDebug --stacktrace
 
-      - name: Stage Artifacts
+      - name: Stage CI Artifacts
         run: |
           mkdir -p ci-artifacts
-          find app/build/outputs/apk/debug -name "*.apk" -type f -exec cp -v {} ci-artifacts/AudioFactory-debug.apk \; 2>/dev/null || true
+          
+          RAW_DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
+          RAW_DEBUG_AAB="app/build/outputs/bundle/debug/app-debug.aab"
+          
+          if [ -s "$RAW_DEBUG_APK" ]; then
+            cp -v "$RAW_DEBUG_APK" ci-artifacts/AudioFactory-debug.apk
+          fi
+          
+          if [ -s "$RAW_DEBUG_AAB" ]; then
+            cp -v "$RAW_DEBUG_AAB" ci-artifacts/AudioFactory-debug.aab
+          fi
 
-      - name: Upload Debug APK
+          echo "=== Staged CI Artifacts ==="
+          ls -lh ci-artifacts/
+
+      - name: Upload Debug APK & AAB Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: audio-factory-debug-apk
-          path: ci-artifacts/*.apk
+          name: audio-factory-debug-apk-and-aab
+          path: ci-artifacts/*
           if-no-files-found: error
           retention-days: 14
