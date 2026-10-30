@@ -4,7 +4,25 @@ This guide details common CI/CD, build, signing, and verification issues along w
 
 ---
 
-## 1. Missing or Invalid Signing Secrets in GitHub Actions
+## 1. Google Play Console Warnings (Deobfuscation & Native Debug Symbols)
+
+### Issue
+When uploading `AudioFactory-V1.1.0.aab` to Google Play Console, warnings appear:
+1. *Warning: There is no deobfuscation file associated with this App Bundle...*
+2. *Warning: This App Bundle contains native code, and you've not uploaded debug symbols...*
+
+### Cause & Resolution
+Both warnings are fully resolved in `app/build.gradle.kts`:
+
+1. **Deobfuscation File (`proguard.map`)**:
+   R8 code shrinking and resource shrinking are enabled for release builds (`isMinifyEnabled = true`, `isShrinkResources = true`). AGP automatically generates `mapping.txt` and embeds it directly inside the AAB bundle at `BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map`. Google Play Console automatically detects this map during AAB processing to deobfuscate stack traces.
+
+2. **Native Debug Symbols (`SYMBOL_TABLE`)**:
+   Android Gradle Plugin is configured with `ndk { debugSymbolLevel = "SYMBOL_TABLE" }` in `buildTypes.release`. Native debug symbol tables for C/C++ libraries (e.g., `libandroidx.graphics.path.so`) are automatically packaged inside the App Bundle under `BUNDLE-METADATA/com.android.tools.build.debugsymbols/` for ANR and crash analysis.
+
+---
+
+## 2. Missing or Invalid Signing Secrets in GitHub Actions
 
 ### Issue
 The release workflow fails at step `Restore & Validate Release Signing Keystore` with:
@@ -31,7 +49,7 @@ The GitHub repository secrets `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD
 
 ---
 
-## 2. Keystore Password or Key Alias Mismatch
+## 3. Keystore Password or Key Alias Mismatch
 
 ### Issue
 Gradle build fails during `./gradlew assembleRelease` or `./gradlew bundleRelease` with:
@@ -52,7 +70,7 @@ Ensure `KEY_ALIAS` matches the alias name printed by `keytool` (e.g. `upload`). 
 
 ---
 
-## 3. APK / AAB Signature Verification Failure
+## 4. APK / AAB Signature Verification Failure
 
 ### Issue
 The workflow step `Verify APK & AAB Signatures and Metadata` fails during `apksigner` or `jarsigner` verification:
@@ -77,7 +95,7 @@ Ensure both `assembleRelease` and `bundleRelease` tasks run with the environment
 
 ---
 
-## 4. Package ID or Version Mismatch
+## 5. Package ID or Version Mismatch
 
 ### Issue
 Verification fails with:
@@ -102,7 +120,7 @@ defaultConfig {
 
 ---
 
-## 5. Permission Denied on `./gradlew`
+## 6. Permission Denied on `./gradlew`
 
 ### Issue
 GitHub Actions runner fails with `bash: ./gradlew: Permission denied`.
