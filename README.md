@@ -10,7 +10,7 @@ Production-quality native Android client wrapping and integrating with the live 
 | :--- | :--- |
 | **Application Name** | Audio Factory |
 | **Release Version** | 1.1.0 |
-| **Version Code** | 2 |
+| **Version Code** | 3 |
 | **Namespace** | `com.audiofactory.app` |
 | **Application ID** | `com.audiofactory.app` |
 | **Production Target URL** | `https://audiofactory.vercel.app` |

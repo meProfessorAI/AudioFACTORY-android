@@ -170,8 +170,8 @@ jobs:
             exit 1
           }
 
-          echo "$BADGING" | grep "versionCode='2'" || {
-            echo "::error::Version code mismatch! Expected versionCode='2'"
+          echo "$BADGING" | grep "versionCode='3'" || {
+            echo "::error::Version code mismatch! Expected versionCode='3'"
             exit 1
           }
 
@@ -214,7 +214,7 @@ jobs:
             ### Package Information
             - **Application ID**: `com.audiofactory.app`
             - **Version Name**: `1.1.0`
-            - **Version Code**: `2`
+            - **Version Code**: `3`
             - **Target SDK**: API 36 (Android 16)
             - **Minimum SDK**: API 24 (Android 7.0)
 

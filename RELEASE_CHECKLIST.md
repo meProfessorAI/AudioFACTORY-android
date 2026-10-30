@@ -1,6 +1,6 @@
 # Audio Factory V1.1.0 — Privacy & Release Readiness Checklist
 
-This document tracks pre-release verifications for publishing Audio Factory V1.1.0 (versionCode 2) on Google Play.
+This document tracks pre-release verifications for publishing Audio Factory V1.1.0 (versionCode 3) on Google Play.
 
 ---
 
@@ -8,7 +8,7 @@ This document tracks pre-release verifications for publishing Audio Factory V1.1
 
 - [x] **Package ID & Namespace**: `com.audiofactory.app`
 - [x] **Version Name**: `1.1.0`
-- [x] **Version Code**: `2`
+- [x] **Version Code**: `3`
 - [x] **App Title Compliance**: `Audio Factory` (13 characters, no promotional claims or emojis).
 - [x] **Zero-Permission Media & Storage**: No `READ_EXTERNAL_STORAGE` or `MANAGE_EXTERNAL_STORAGE`. Modern Scoped Storage and system file pickers are used exclusively.
 - [x] **HTTPS Enforcement**: Network security config strictly disables cleartext traffic (`cleartextTrafficPermitted="false"`).
