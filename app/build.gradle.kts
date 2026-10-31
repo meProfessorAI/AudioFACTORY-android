@@ -16,7 +16,7 @@ android {
     applicationId = "com.audiofactory.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
+    versionCode = 5
     versionName = "2.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -57,7 +57,7 @@ android {
 
       // Package native debug symbol table inside App Bundle for Google Play crash analysis
       ndk {
-        debugSymbolLevel = "SYMBOL_TABLE"
+        debugSymbolLevel = "FULL"
       }
     }
     debug {
