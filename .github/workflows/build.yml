@@ -21,6 +21,7 @@ permissions:
 jobs:
   validate:
     name: Android Build and Test
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
@@ -36,35 +37,13 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # 3. Configure Android SDK
-      - name: Configure Android SDK
-        run: |
-          set -euo pipefail
-
-          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f -executable | sort -V | tail -n 1)"
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "::error::Android SDK command-line tools not found."
-            exit 1
-          fi
-
-          echo "Using SDK manager: $SDKMANAGER"
-
-          yes | "$SDKMANAGER" --licenses
-
-          "$SDKMANAGER" --install \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
-
-          echo "Android SDK configured successfully."
+      # 3. Install Android SDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-36.1 build-tools;36.0.0'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
 
       # 4. Configure Gradle
       - name: Set up Gradle
@@ -73,7 +52,7 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
 
-      # 5. Restore Firebase configuration
+      # 5. Restore and validate Firebase configuration
       - name: Restore Firebase Configuration
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
@@ -81,7 +60,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "${GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
-            echo "::error::Missing GOOGLE_SERVICES_JSON_BASE64 secret."
+            echo "::error::Missing GOOGLE_SERVICES_JSON_BASE64 repository secret."
             exit 1
           fi
 
@@ -98,8 +77,9 @@ jobs:
           with open("app/google-services.json", encoding="utf-8") as f:
               config = json.load(f)
 
-          assert config["project_info"]["project_id"] == "audiofactory-eia", \
-              "Incorrect Firebase project."
+          assert config["project_info"]["project_id"] == "audiofactory-eia", (
+              "Firebase project ID does not match audiofactory-eia"
+          )
 
           matching = [
               client for client in config["client"]
@@ -107,7 +87,7 @@ jobs:
               == "com.audiofactory.app"
           ]
 
-          assert matching, "Android package not found in Firebase configuration."
+          assert matching, "Firebase Android package not found"
 
           web_clients = [
               oauth
@@ -116,7 +96,7 @@ jobs:
               if oauth.get("client_type") == 3
           ]
 
-          assert web_clients, "Firebase Web OAuth client is missing."
+          assert web_clients, "Firebase Web OAuth client is missing"
 
           print("Firebase configuration verified successfully.")
           PY
@@ -142,6 +122,7 @@ jobs:
           fi
 
           test -s debug.keystore
+
           echo "Debug keystore ready."
 
       # 7. Restore release upload keystore
@@ -152,7 +133,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "${KEYSTORE_BASE64:-}" ]; then
-            echo "::error::Missing KEYSTORE_BASE64 secret."
+            echo "::error::Missing KEYSTORE_BASE64 repository secret."
             exit 1
           fi
 
@@ -198,19 +179,38 @@ jobs:
       # 9. Configure environment
       - name: Configure Environment
         run: |
+          set -euo pipefail
+
           if [ ! -f .env ] && [ -f .env.example ]; then
             cp .env.example .env
           fi
 
-      # 10. Validate Gradle configuration
+      # 10. Verify build environment
+      - name: Verify Build Environment
+        run: |
+          set -euo pipefail
+
+          echo "Java version:"
+          java -version
+
+          echo "Android SDK:"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+          test -d "$ANDROID_HOME/platforms/android-36.1"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+
+          echo "Gradle version:"
+          ./gradlew --version
+
+      # 11. Validate Gradle configuration
       - name: Validate Gradle Configuration
         run: ./gradlew tasks --stacktrace
 
-      # 11. Run unit tests
+      # 12. Run unit and Robolectric tests
       - name: Run Unit and Robolectric Tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
-      # 12. Build debug APK and release AAB
+      # 13. Build debug APK and release AAB
       - name: Build Debug APK and Release AAB
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
@@ -219,25 +219,41 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           set -euo pipefail
-          ./gradlew assembleDebug bundleRelease --stacktrace
 
-      # 13. Verify release bundle
-      - name: Verify Release AAB
+          ./gradlew --no-daemon \
+            assembleDebug \
+            bundleRelease \
+            --stacktrace
+
+      # 14. Verify APK and AAB signatures
+      - name: Verify Build Signatures
         run: |
           set -euo pipefail
 
-          AAB="app/build/outputs/bundle/release/app-release.aab"
+          DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_AAB="app/build/outputs/bundle/release/app-release.aab"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
 
-          if [ ! -s "$AAB" ]; then
-            echo "::error::Release AAB was not generated."
+          test -s "$DEBUG_APK"
+          test -s "$RELEASE_AAB"
+
+          "$APKSIGNER" verify --verbose "$DEBUG_APK"
+
+          jarsigner -verify -verbose -certs "$RELEASE_AAB" \
+            > aab-verification.txt 2>&1 || {
+              cat aab-verification.txt
+              exit 1
+            }
+
+          if ! grep -qi 'jar verified' aab-verification.txt; then
+            cat aab-verification.txt
+            echo "::error::Release AAB signature verification failed."
             exit 1
           fi
 
-          jarsigner -verify -verbose -certs "$AAB"
+          echo "Debug APK and release AAB signatures verified."
 
-          echo "Release AAB signature verification completed."
-
-      # 14. Stage artifacts
+      # 15. Stage build artifacts
       - name: Stage Build Artifacts
         run: |
           set -euo pipefail
@@ -253,7 +269,7 @@ jobs:
           echo "Generated artifacts:"
           ls -lh ci-artifacts/
 
-      # 15. Upload APK and AAB
+      # 16. Upload APK and AAB
       - name: Upload Android Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -262,7 +278,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # 16. Upload test reports
+      # 17. Upload test reports
       - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -272,9 +288,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # 17. Cleanup sensitive files
+      # 18. Cleanup sensitive files
       - name: Cleanup Sensitive Files
         if: always()
         run: |
           rm -f app/google-services.json
           rm -f my-upload-key.jks
+          rm -f aab-verification.txt
