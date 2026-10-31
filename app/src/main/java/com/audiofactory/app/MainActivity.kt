@@ -15,11 +15,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.audiofactory.app.auth.AuthManager
 import com.audiofactory.app.data.NetworkConnectivityObserver
 import com.audiofactory.app.policy.AudioFactoryWebPolicy
 import com.audiofactory.app.service.AudioFactoryDownloadManager
@@ -31,10 +30,13 @@ class MainActivity : ComponentActivity() {
     private var sharedWebView: WebView? = null
     private var pendingFilePathCallback: ValueCallback<Array<Uri>>? = null
     private var onPermissionGrantedCallback: (() -> Unit)? = null
+    private lateinit var authManager: AuthManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        authManager = AuthManager(applicationContext)
 
         val webView = WebView(this).also {
             sharedWebView = it
@@ -43,12 +45,11 @@ class MainActivity : ComponentActivity() {
         val downloadManager = AudioFactoryDownloadManager(this)
         val connectivityObserver = NetworkConnectivityObserver(this)
 
-        // Load the production Audio Factory URL or incoming auth/app link
-        val startUrl = intent?.data?.let { uri ->
-            if (AudioFactoryWebPolicy.isAllowedInWebView(uri)) uri.toString() else null
-        } ?: AudioFactoryWebPolicy.START_URL
+        // Load the production Audio Factory URL
+        webView.loadUrl(AudioFactoryWebPolicy.START_URL)
 
-        webView.loadUrl(startUrl)
+        // Attempt silent auto sign-in if credentials exist
+        authManager.attemptAutoSignIn(webView, lifecycleScope)
 
         setContent {
             AudioFactoryTheme {
@@ -103,13 +104,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Lifecycle management for WebView audio & timers
-                DisposableEffect(Unit) {
-                    onDispose {
-                        // Cleanup handled in onDestroy
-                    }
-                }
-
                 AudioFactoryMainScreen(
                     webView = webView,
                     downloadManager = downloadManager,
@@ -154,20 +148,17 @@ class MainActivity : ComponentActivity() {
                             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
                     },
+                    onRequestGoogleSignIn = {
+                        authManager.signInWithGoogle(
+                            activity = this@MainActivity,
+                            webView = webView,
+                            scope = lifecycleScope
+                        )
+                    },
                     onExitApp = {
                         finish()
                     }
                 )
-            }
-        }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        intent.data?.let { uri ->
-            if (AudioFactoryWebPolicy.isAllowedInWebView(uri)) {
-                sharedWebView?.loadUrl(uri.toString())
             }
         }
     }

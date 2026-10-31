@@ -1,82 +1,61 @@
 package com.audiofactory.app
 
+import android.net.Uri
 import com.audiofactory.app.policy.AudioFactoryWebPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(manifest = Config.NONE, sdk = [34])
 class AudioFactoryWebPolicyTest {
 
     @Test
     fun `trusted origin returns true for official audio factory domains`() {
-        val prodUrl = "https://audiofactory.vercel.app"
-        val prodSubUrl = "https://audiofactory.vercel.app/studio/generate"
-        val altUrl = "https://audiofactory.app"
+        val prodUri = Uri.parse("https://audiofactory.vercel.app")
+        val prodSubUri = Uri.parse("https://audiofactory.vercel.app/studio/generate")
+        val altUri = Uri.parse("https://audiofactory.app")
 
-        assertTrue(AudioFactoryWebPolicy.isTrustedOrigin(prodUrl))
-        assertTrue(AudioFactoryWebPolicy.isTrustedOrigin(prodSubUrl))
-        assertTrue(AudioFactoryWebPolicy.isTrustedOrigin(altUrl))
+        assertTrue(AudioFactoryWebPolicy.isTrustedOrigin(prodUri))
+        assertTrue(AudioFactoryWebPolicy.isTrustedOrigin(prodSubUri))
+        assertTrue(AudioFactoryWebPolicy.isTrustedOrigin(altUri))
     }
 
     @Test
     fun `trusted origin rejects third-party and malicious domains`() {
-        val phishingUrl = "https://audiofactory.vercel.app.attacker.com"
-        val evilUrl = "https://evil-audio.com"
-        val googleUrl = "https://accounts.google.com"
+        val phishingUri = Uri.parse("https://audiofactory.vercel.app.attacker.com")
+        val evilUri = Uri.parse("https://evil-audio.com")
+        val googleUri = Uri.parse("https://accounts.google.com")
 
-        assertFalse(AudioFactoryWebPolicy.isTrustedOrigin(phishingUrl))
-        assertFalse(AudioFactoryWebPolicy.isTrustedOrigin(evilUrl))
-        assertFalse(AudioFactoryWebPolicy.isTrustedOrigin(googleUrl))
-    }
-
-    @Test
-    fun `auth host recognizes firebase auth and google oauth urls`() {
-        val firebaseAuthUrl = "https://audiofactory-eia.firebaseapp.com/__/auth/handler?state=AMbdmDnrTVFRw86U8axVqYNKUxhjZLqGrVf6VE6aVZ5&code=4/0AUn6Hd"
-        val googleOAuthUrl = "https://accounts.google.com/o/oauth2/v2/auth?client_id=123"
-        val googleApisUrl = "https://oauth2.googleapis.com/token"
-
-        assertTrue(AudioFactoryWebPolicy.isAuthHost(firebaseAuthUrl))
-        assertTrue(AudioFactoryWebPolicy.isAuthHost(googleOAuthUrl))
-        assertTrue(AudioFactoryWebPolicy.isAuthHost(googleApisUrl))
-
-        val randomUrl = "https://example.com"
-        assertFalse(AudioFactoryWebPolicy.isAuthHost(randomUrl))
-    }
-
-    @Test
-    fun `isAllowedInWebView permits both application origin and authentication flows`() {
-        val appUrl = "https://audiofactory.vercel.app/pricing"
-        val authUrl = "https://audiofactory-eia.firebaseapp.com/__/auth/handler"
-        val googleUrl = "https://accounts.google.com"
-        val untrustedUrl = "https://untrusted-external-site.com"
-
-        assertTrue(AudioFactoryWebPolicy.isAllowedInWebView(appUrl))
-        assertTrue(AudioFactoryWebPolicy.isAllowedInWebView(authUrl))
-        assertTrue(AudioFactoryWebPolicy.isAllowedInWebView(googleUrl))
-        assertFalse(AudioFactoryWebPolicy.isAllowedInWebView(untrustedUrl))
+        assertFalse(AudioFactoryWebPolicy.isTrustedOrigin(phishingUri))
+        assertFalse(AudioFactoryWebPolicy.isTrustedOrigin(evilUri))
+        assertFalse(AudioFactoryWebPolicy.isTrustedOrigin(googleUri))
     }
 
     @Test
     fun `external action schemes identified correctly`() {
-        val mailUrl = "mailto:support@audiofactory.app"
-        val telUrl = "tel:+1234567890"
-        val webUrl = "https://audiofactory.vercel.app"
+        val mailUri = Uri.parse("mailto:support@audiofactory.app")
+        val telUri = Uri.parse("tel:+1234567890")
+        val webUri = Uri.parse("https://audiofactory.vercel.app")
 
-        assertTrue(AudioFactoryWebPolicy.isExternalActionScheme(mailUrl))
-        assertTrue(AudioFactoryWebPolicy.isExternalActionScheme(telUrl))
-        assertFalse(AudioFactoryWebPolicy.isExternalActionScheme(webUrl))
+        assertTrue(AudioFactoryWebPolicy.isExternalActionScheme(mailUri))
+        assertTrue(AudioFactoryWebPolicy.isExternalActionScheme(telUri))
+        assertFalse(AudioFactoryWebPolicy.isExternalActionScheme(webUri))
     }
 
     @Test
     fun `disallowed schemes are rejected by safe scheme check`() {
-        val jsUrl = "javascript:alert(1)"
-        val fileUrl = "file:///data/data/com.audiofactory.app"
-        val contentUrl = "content://settings/system"
+        val jsUri = Uri.parse("javascript:alert(1)")
+        val fileUri = Uri.parse("file:///data/data/com.audiofactory.app")
+        val contentUri = Uri.parse("content://settings/system")
 
-        assertFalse(AudioFactoryWebPolicy.isSafeScheme(jsUrl))
-        assertFalse(AudioFactoryWebPolicy.isSafeScheme(fileUrl))
-        assertFalse(AudioFactoryWebPolicy.isSafeScheme(contentUrl))
+        assertFalse(AudioFactoryWebPolicy.isSafeScheme(jsUri))
+        assertFalse(AudioFactoryWebPolicy.isSafeScheme(fileUri))
+        assertFalse(AudioFactoryWebPolicy.isSafeScheme(contentUri))
     }
 
     @Test

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
@@ -44,7 +45,6 @@ import com.audiofactory.app.ui.theme.StudioBlue
 import com.audiofactory.app.ui.theme.StudioGreen
 import com.audiofactory.app.ui.theme.StudioRose
 import com.audiofactory.app.ui.theme.StudioSurface
-import com.audiofactory.app.ui.theme.StudioTextMuted
 import com.audiofactory.app.ui.theme.StudioTextPrimary
 import com.audiofactory.app.ui.theme.StudioTextSecondary
 
@@ -54,6 +54,7 @@ fun AudioFactoryTopBar(
     isNetworkAvailable: Boolean,
     isLoading: Boolean,
     onReload: () -> Unit,
+    onGoogleSignIn: () -> Unit,
     onShare: () -> Unit,
     onClearCache: () -> Unit,
     onOpenPrivacy: () -> Unit,
@@ -97,6 +98,18 @@ fun AudioFactoryTopBar(
             }
         },
         actions = {
+            // Google Sign-In Quick Action Button
+            IconButton(
+                onClick = onGoogleSignIn,
+                modifier = Modifier.testTag("top_bar_google_signin_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = "Sign in with Google",
+                    tint = StudioBlue
+                )
+            }
+
             IconButton(
                 onClick = onReload,
                 modifier = Modifier.testTag("top_bar_reload_button")
@@ -127,6 +140,16 @@ fun AudioFactoryTopBar(
                         .background(StudioSurface)
                         .testTag("top_bar_dropdown_menu")
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Sign in with Google", color = StudioTextPrimary) },
+                        leadingIcon = {
+                            Icon(Icons.Default.AccountCircle, contentDescription = null, tint = StudioBlue)
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onGoogleSignIn()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_share), color = StudioTextPrimary) },
                         leadingIcon = {
