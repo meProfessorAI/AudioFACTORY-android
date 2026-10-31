@@ -74,7 +74,14 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all {
+        it.systemProperty("robolectric.usePreinstrumentedJars", "false")
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
