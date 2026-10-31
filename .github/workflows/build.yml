@@ -37,11 +37,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # 3. Install Android SDK
+      # 3. Install Android SDK & NDK for AGP 9.1.1 native symbol tasks
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools platforms;android-36.1 build-tools;36.0.0'
+          packages: 'platform-tools platforms;android-36.1 build-tools;36.0.0 ndk;28.2.13676358'
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
 
@@ -210,7 +210,7 @@ jobs:
       - name: Run Unit and Robolectric Tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
-      # 13. Build debug APK and release AAB
+      # 13. Build debug APK and release AAB with --info diagnostics captured
       - name: Build Debug APK and Release AAB
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
@@ -220,13 +220,16 @@ jobs:
         run: |
           set -euo pipefail
 
+          mkdir -p ci-reports
+
           ./gradlew --no-daemon \
             assembleDebug \
-            bundleRelease \
-            --stacktrace
+            :app:bundleRelease \
+            --info \
+            --stacktrace 2>&1 | tee ci-reports/bundleRelease-info.log
 
-      # 14. Verify APK and AAB signatures, versionCode=6, versionName=2.0.0, and R8 mapping
-      - name: Verify Build Signatures and AAB Metadata
+      # 14. Verify APK and AAB signatures, versionCode=7, versionName=2.0.0, R8 mapping, and native symbols
+      - name: Verify Build Signatures, AAB Metadata, and Native Symbol Diagnostics
         run: |
           set -euo pipefail
 
@@ -258,8 +261,14 @@ jobs:
             exit 1
           fi
 
+          grep -E "Unable to extract native debug metadata from|native debug metadata has already been stripped|Unable to strip|extractReleaseNativeDebugMetadata|extractReleaseNativeSymbolTables|mergeReleaseNativeDebugMetadata" \
+            ci-reports/bundleRelease-info.log > ci-reports/native-symbol-diagnostics.txt || true
+
+          echo "=== Native Symbol Extraction Diagnostics ==="
+          cat ci-reports/native-symbol-diagnostics.txt
+
           python3 - <<'PY'
-          import zipfile
+          import os, zipfile
 
           aab_path = "app/build/outputs/bundle/release/app-release.aab"
           with zipfile.ZipFile(aab_path, "r") as z:
@@ -269,18 +278,35 @@ jobs:
                   "Missing embedded R8 mapping file in AAB"
               )
               manifest_pb = z.read("base/manifest/AndroidManifest.xml")
+              so_files = sorted([n for n in names if n.endswith(".so")])
+              embedded_debug_symbols = sorted([
+                  n for n in names
+                  if n.startswith("BUNDLE-METADATA/com.android.tools.build.debugsymbols/")
+              ])
 
           assert b"com.audiofactory.app" in manifest_pb, "Package ID mismatch in AAB manifest"
-          assert b"versionCode\x1a\x016" in manifest_pb, "AAB versionCode is not 6"
+          assert b"versionCode\x1a\x017" in manifest_pb, "AAB versionCode is not 7"
           assert b"versionName\x1a\x052.0.0" in manifest_pb, "AAB versionName is not 2.0.0"
           assert b"com.google.android.gms.permission.AD_ID" not in manifest_pb, (
               "Unexpected AD_ID permission found in AAB manifest"
           )
 
-          print("Verified AAB metadata: package=com.audiofactory.app, versionCode=6, versionName=2.0.0")
+          print("Verified AAB metadata: package=com.audiofactory.app, versionCode=7, versionName=2.0.0")
+          print(f"Packaged .so libraries ({len(so_files)}): {so_files}")
+          print(f"Embedded BUNDLE-METADATA debug symbols ({len(embedded_debug_symbols)}): {embedded_debug_symbols}")
+
+          known_prestripped = {"libandroidx.graphics.path.so", "libdatastore_shared_counter.so"}
+          for so_entry in so_files:
+              lib_name = os.path.basename(so_entry)
+              if lib_name not in known_prestripped:
+                  expected_sym = "BUNDLE-METADATA/com.android.tools.build.debugsymbols/" + so_entry[len("base/lib/"):]
+                  if not any(s.startswith(expected_sym) for s in embedded_debug_symbols):
+                      raise AssertionError(f"Unstripped/app-owned native library {so_entry} is missing debug symbols in AAB!")
+              else:
+                  print(f"::warning title=Third-Party Pre-Stripped Native Library::{so_entry} comes from Google AndroidX prebuilt AAR with native debug metadata already stripped upstream.")
           PY
 
-          echo "Debug APK and release AAB signatures and metadata verified."
+          echo "Debug APK and release AAB signatures, metadata, and native symbol diagnostics verified."
 
       # 15. Stage build artifacts
       - name: Stage Build Artifacts
@@ -293,7 +319,7 @@ jobs:
             ci-artifacts/AudioFactory-debug.apk
 
           cp app/build/outputs/bundle/release/app-release.aab \
-            ci-artifacts/AudioFactory-release-v2.0.0-v6.aab
+            ci-artifacts/AudioFactory-release-v2.0.0-v7.aab
 
           cp app/build/outputs/bundle/release/app-release.aab \
             ci-artifacts/AudioFactory-release.aab
@@ -307,7 +333,11 @@ jobs:
             cp "$SYMBOLS_ZIP" ci-symbols/native-debug-symbols.zip
             echo "Native debug symbols archive staged."
           else
-            echo "Note: No native-debug-symbols.zip produced by AGP because all bundled .so libraries (libandroidx.graphics.path.so, libdatastore_shared_counter.so) are pre-stripped upstream in Google AndroidX Maven artifacts."
+            echo "::warning title=Missing Native Debug Symbols Archive::AGP did not generate native-debug-symbols.zip because all 8 bundled .so libraries (libandroidx.graphics.path.so, libdatastore_shared_counter.so) are pre-stripped upstream in Google AndroidX Maven AARs."
+          fi
+
+          if [ -f AUDIOFACTORY_NATIVE_SYMBOLS_AUDIT.md ]; then
+            cp AUDIOFACTORY_NATIVE_SYMBOLS_AUDIT.md ci-reports/AUDIOFACTORY_NATIVE_SYMBOLS_AUDIT.md
           fi
 
           if [ -f AUDIOFACTORY_V2_RELEASE_AUDIT.md ]; then
@@ -318,9 +348,9 @@ jobs:
           # AudioFACTORY CI Build Validation Summary
           - **Application**: AudioFACTORY (\`com.audiofactory.app\`)
           - **Version Name**: \`2.0.0\`
-          - **Version Code**: \`6\`
+          - **Version Code**: \`7\`
           - **Debug APK**: \`AudioFactory-debug.apk\` ($(stat -c%s ci-artifacts/AudioFactory-debug.apk) bytes)
-          - **Release AAB**: \`AudioFactory-release-v2.0.0-v6.aab\` ($(stat -c%s ci-artifacts/AudioFactory-release-v2.0.0-v6.aab) bytes)
+          - **Release AAB**: \`AudioFactory-release-v2.0.0-v7.aab\` ($(stat -c%s ci-artifacts/AudioFactory-release-v2.0.0-v7.aab) bytes)
           - **R8 Mapping**: \`mapping.txt\` ($(stat -c%s ci-mapping/mapping.txt) bytes)
           - **Signature Verification**: Passed (\`apksigner\` & \`jarsigner\`)
           EOF
