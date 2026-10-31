@@ -10,7 +10,7 @@ on:
     inputs:
       tag_name:
         description: 'Tag or Version for Release (e.g. v1.1.0)'
-        required: false
+        required: true
         default: 'v1.1.0'
 
 concurrency:
