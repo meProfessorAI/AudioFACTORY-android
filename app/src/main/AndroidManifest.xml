@@ -38,6 +38,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Deep link intent filter for Audio Factory web app and Firebase Auth redirect callbacks -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="audiofactory.vercel.app" />
+                <data android:scheme="https" android:host="audiofactory.app" />
+                <data android:scheme="https" android:host="audiofactory-eia.firebaseapp.com" />
+            </intent-filter>
         </activity>
 
     </application>

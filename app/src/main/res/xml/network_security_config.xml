@@ -11,5 +11,10 @@
         <domain includeSubdomains="true">audiofactory.app</domain>
         <domain includeSubdomains="true">vercel.app</domain>
         <domain includeSubdomains="true">vercel-scripts.com</domain>
+        <domain includeSubdomains="true">firebaseapp.com</domain>
+        <domain includeSubdomains="true">web.app</domain>
+        <domain includeSubdomains="true">google.com</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
     </domain-config>
 </network-security-config>

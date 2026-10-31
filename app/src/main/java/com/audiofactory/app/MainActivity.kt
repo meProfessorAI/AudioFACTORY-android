@@ -43,8 +43,12 @@ class MainActivity : ComponentActivity() {
         val downloadManager = AudioFactoryDownloadManager(this)
         val connectivityObserver = NetworkConnectivityObserver(this)
 
-        // Load the production Audio Factory URL
-        webView.loadUrl(AudioFactoryWebPolicy.START_URL)
+        // Load the production Audio Factory URL or incoming auth/app link
+        val startUrl = intent?.data?.let { uri ->
+            if (AudioFactoryWebPolicy.isAllowedInWebView(uri)) uri.toString() else null
+        } ?: AudioFactoryWebPolicy.START_URL
+
+        webView.loadUrl(startUrl)
 
         setContent {
             AudioFactoryTheme {
@@ -154,6 +158,16 @@ class MainActivity : ComponentActivity() {
                         finish()
                     }
                 )
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.data?.let { uri ->
+            if (AudioFactoryWebPolicy.isAllowedInWebView(uri)) {
+                sharedWebView?.loadUrl(uri.toString())
             }
         }
     }

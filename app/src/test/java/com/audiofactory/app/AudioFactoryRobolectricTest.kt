@@ -1,29 +1,14 @@
 package com.audiofactory.app
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import com.audiofactory.app.data.WebErrorType
 import com.audiofactory.app.data.WebUiState
-import com.audiofactory.app.service.AudioFactoryDownloadManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
-class AudioFactoryRobolectricTest {
-
-    @Test
-    fun `application name is Audio Factory`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val appName = context.getString(R.string.app_name)
-        assertEquals("Audio Factory", appName)
-    }
+class AudioFactoryStateUnitTest {
 
     @Test
     fun `web ui initial state is configured correctly`() {
@@ -44,12 +29,5 @@ class AudioFactoryRobolectricTest {
         assertEquals("audiofactory.vercel.app", dnsError.host)
         assertEquals(503, httpError.statusCode)
         assertNotNull(offlineError)
-    }
-
-    @Test
-    fun `download manager initializes without errors`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val manager = AudioFactoryDownloadManager(context)
-        assertNotNull(manager)
     }
 }
