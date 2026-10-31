@@ -145,7 +145,7 @@ fun AboutDialog(
                 )
 
                 Text(
-                    text = "Version 1.0 (Build 1)",
+                    text = "Version ${com.audiofactory.app.BuildConfig.VERSION_NAME} (Build ${com.audiofactory.app.BuildConfig.VERSION_CODE})",
                     color = StudioTextMuted,
                     style = MaterialTheme.typography.labelSmall
                 )

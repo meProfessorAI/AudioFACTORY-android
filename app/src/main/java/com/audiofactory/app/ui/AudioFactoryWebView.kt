@@ -78,7 +78,7 @@ fun AudioFactoryWebView(
                     // Custom user agent suffix identifying native Android app
                     val baseUa = userAgentString
                     if (!baseUa.contains("AudioFactoryAndroid")) {
-                        userAgentString = "$baseUa AudioFactoryAndroid/1.1"
+                        userAgentString = "$baseUa AudioFactoryAndroid/${com.audiofactory.app.BuildConfig.VERSION_NAME}"
                     }
                 }
 

@@ -1,6 +1,7 @@
 package com.audiofactory.app.bridge
 
 import android.webkit.JavascriptInterface
+import com.audiofactory.app.BuildConfig
 import com.audiofactory.app.service.AudioFactoryDownloadManager
 
 class AudioFactoryNativeBridge(
@@ -42,5 +43,5 @@ class AudioFactoryNativeBridge(
      * Returns native app build version.
      */
     @JavascriptInterface
-    fun getNativeAppVersion(): String = "1.1.0"
+    fun getNativeAppVersion(): String = BuildConfig.VERSION_NAME
 }

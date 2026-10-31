@@ -225,17 +225,19 @@ jobs:
             bundleRelease \
             --stacktrace
 
-      # 14. Verify APK and AAB signatures
-      - name: Verify Build Signatures
+      # 14. Verify APK and AAB signatures, versionCode=6, versionName=2.0.0, and R8 mapping
+      - name: Verify Build Signatures and AAB Metadata
         run: |
           set -euo pipefail
 
           DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
           RELEASE_AAB="app/build/outputs/bundle/release/app-release.aab"
+          R8_MAPPING="app/build/outputs/mapping/release/mapping.txt"
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
 
           test -s "$DEBUG_APK"
           test -s "$RELEASE_AAB"
+          test -s "$R8_MAPPING"
 
           "$APKSIGNER" verify --verbose "$DEBUG_APK"
 
@@ -251,23 +253,80 @@ jobs:
             exit 1
           fi
 
-          echo "Debug APK and release AAB signatures verified."
+          if grep -qi 'CN=Android Debug' aab-verification.txt; then
+            echo "::error::Release AAB was signed with the fallback Android Debug key instead of the release upload key."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import zipfile
+
+          aab_path = "app/build/outputs/bundle/release/app-release.aab"
+          with zipfile.ZipFile(aab_path, "r") as z:
+              names = set(z.namelist())
+              assert "base/manifest/AndroidManifest.xml" in names, "Missing base manifest in AAB"
+              assert "BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map" in names, (
+                  "Missing embedded R8 mapping file in AAB"
+              )
+              manifest_pb = z.read("base/manifest/AndroidManifest.xml")
+
+          assert b"com.audiofactory.app" in manifest_pb, "Package ID mismatch in AAB manifest"
+          assert b"versionCode\x1a\x016" in manifest_pb, "AAB versionCode is not 6"
+          assert b"versionName\x1a\x052.0.0" in manifest_pb, "AAB versionName is not 2.0.0"
+          assert b"com.google.android.gms.permission.AD_ID" not in manifest_pb, (
+              "Unexpected AD_ID permission found in AAB manifest"
+          )
+
+          print("Verified AAB metadata: package=com.audiofactory.app, versionCode=6, versionName=2.0.0")
+          PY
+
+          echo "Debug APK and release AAB signatures and metadata verified."
 
       # 15. Stage build artifacts
       - name: Stage Build Artifacts
         run: |
           set -euo pipefail
 
-          mkdir -p ci-artifacts
+          mkdir -p ci-artifacts ci-mapping ci-reports
 
           cp app/build/outputs/apk/debug/app-debug.apk \
             ci-artifacts/AudioFactory-debug.apk
 
           cp app/build/outputs/bundle/release/app-release.aab \
+            ci-artifacts/AudioFactory-release-v2.0.0-v6.aab
+
+          cp app/build/outputs/bundle/release/app-release.aab \
             ci-artifacts/AudioFactory-release.aab
 
+          cp app/build/outputs/mapping/release/mapping.txt \
+            ci-mapping/mapping.txt
+
+          SYMBOLS_ZIP="app/build/outputs/native-debug-symbols/release/native-debug-symbols.zip"
+          if [ -s "$SYMBOLS_ZIP" ]; then
+            mkdir -p ci-symbols
+            cp "$SYMBOLS_ZIP" ci-symbols/native-debug-symbols.zip
+            echo "Native debug symbols archive staged."
+          else
+            echo "Note: No native-debug-symbols.zip produced by AGP because all bundled .so libraries (libandroidx.graphics.path.so, libdatastore_shared_counter.so) are pre-stripped upstream in Google AndroidX Maven artifacts."
+          fi
+
+          if [ -f AUDIOFACTORY_V2_RELEASE_AUDIT.md ]; then
+            cp AUDIOFACTORY_V2_RELEASE_AUDIT.md ci-reports/AUDIOFACTORY_V2_RELEASE_AUDIT.md
+          fi
+
+          cat <<EOF > ci-reports/build-validation-report.md
+          # AudioFACTORY CI Build Validation Summary
+          - **Application**: AudioFACTORY (\`com.audiofactory.app\`)
+          - **Version Name**: \`2.0.0\`
+          - **Version Code**: \`6\`
+          - **Debug APK**: \`AudioFactory-debug.apk\` ($(stat -c%s ci-artifacts/AudioFactory-debug.apk) bytes)
+          - **Release AAB**: \`AudioFactory-release-v2.0.0-v6.aab\` ($(stat -c%s ci-artifacts/AudioFactory-release-v2.0.0-v6.aab) bytes)
+          - **R8 Mapping**: \`mapping.txt\` ($(stat -c%s ci-mapping/mapping.txt) bytes)
+          - **Signature Verification**: Passed (\`apksigner\` & \`jarsigner\`)
+          EOF
+
           echo "Generated artifacts:"
-          ls -lh ci-artifacts/
+          ls -lh ci-artifacts/ ci-mapping/ ci-reports/
 
       # 16. Upload APK and AAB
       - name: Upload Android Build Artifacts
@@ -278,7 +337,36 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # 17. Upload test reports
+      # 17. Upload R8 Mapping File
+      - name: Upload R8 Mapping File
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioFACTORY-R8-Mapping
+          path: ci-mapping/mapping.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      # 18. Upload Native Debug Symbols (if generated)
+      - name: Upload Native Debug Symbols
+        if: hashFiles('ci-symbols/native-debug-symbols.zip') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioFACTORY-Native-Debug-Symbols
+          path: ci-symbols/native-debug-symbols.zip
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # 19. Upload Build Validation & Audit Report
+      - name: Upload Build Validation Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioFACTORY-Build-Validation-Report
+          path: ci-reports/*
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # 20. Upload test reports
       - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -288,7 +376,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # 18. Cleanup sensitive files
+      # 21. Cleanup sensitive files
       - name: Cleanup Sensitive Files
         if: always()
         run: |

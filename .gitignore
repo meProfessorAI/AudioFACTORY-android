@@ -17,7 +17,8 @@ local.properties
 .env
 debug.keystore
 
-# Signing material security exclusions
+# Signing material and Firebase config security exclusions
+app/google-services.json
 *.jks
 *.keystore
 *.base64
@@ -25,3 +26,4 @@ keystore.properties
 /signing/
 /release_dist/
 /staged-artifacts/
+/ci-artifacts/
