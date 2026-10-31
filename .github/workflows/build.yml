@@ -1,14 +1,18 @@
-name: AudioFACTORY CI Build & Test Validation
+name: AudioFACTORY CI Build and Test Validation
 
-on:
+'on':
 push:
-branches: [main, master]
+branches:
+- main
+- master
 pull_request:
-branches: [main, master]
+branches:
+- main
+- master
 workflow_dispatch:
 
 concurrency:
-group: ci-${{ github.workflow }}-${{ github.ref }}
+group: audiofactory-ci-${{ github.workflow }}-${{ github.ref }}
 cancel-in-progress: true
 
 permissions:
@@ -16,34 +20,39 @@ contents: read
 
 jobs:
 validate:
-name: Build, Test & Package Android
+name: Android Build and Test
 runs-on: ubuntu-latest
-timeout-minutes: 35
+timeout-minutes: 40
 
 steps:
-  - name: Checkout Code
+  # 1. Checkout
+  - name: Checkout Repository
     uses: actions/checkout@v4
 
+  # 2. Java
   - name: Set up JDK 21
     uses: actions/setup-java@v5
     with:
       distribution: temurin
       java-version: '21'
 
+  # 3. Android SDK
   - name: Set up Android SDK
     uses: android-actions/setup-android@v3
-    with:
-      packages: |
-        platform-tools
-        platforms;android-36
-        build-tools;36.0.0
 
-  - name: Setup Gradle
+  - name: Install Android SDK Packages
+    run: |
+      sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+      yes | sdkmanager --licenses || true
+
+  # 4. Gradle
+  - name: Set up Gradle
     uses: gradle/actions/setup-gradle@v4
 
-  - name: Ensure Gradle Wrapper Executable
+  - name: Make Gradle Wrapper Executable
     run: chmod +x ./gradlew
 
+  # 5. Firebase configuration
   - name: Restore Firebase Configuration
     env:
       GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
@@ -51,36 +60,31 @@ steps:
       set -euo pipefail
 
       if [ -z "${GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
-        echo "::error::Missing GOOGLE_SERVICES_JSON_BASE64 GitHub secret."
+        echo "::error::Missing GOOGLE_SERVICES_JSON_BASE64 secret."
         exit 1
       fi
 
       mkdir -p app
       printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
 
-      if [ ! -s app/google-services.json ]; then
-        echo "::error::Firebase configuration is empty."
-        exit 1
-      fi
+      test -s app/google-services.json
 
       python3 - <<'PY'
       import json
 
-      path = "app/google-services.json"
-
-      with open(path, encoding="utf-8") as f:
+      with open("app/google-services.json", encoding="utf-8") as f:
           config = json.load(f)
 
-      assert config["project_info"]["project_id"] == "audiofactory-eia"
+      assert config["project_info"]["project_id"] == "audiofactory-eia", \
+          "Incorrect Firebase project"
 
-      clients = config["client"]
       matching = [
-          c for c in clients
+          c for c in config["client"]
           if c["client_info"]["android_client_info"]["package_name"]
           == "com.audiofactory.app"
       ]
 
-      assert matching, "Android package com.audiofactory.app not found"
+      assert matching, "Android package not found"
 
       web_clients = [
           oauth
@@ -89,11 +93,12 @@ steps:
           if oauth.get("client_type") == 3
       ]
 
-      assert web_clients, "Web OAuth client (type 3) is missing"
+      assert web_clients, "Web OAuth client missing"
 
-      print("Firebase project, Android package and Web OAuth client verified.")
+      print("Firebase configuration verified successfully.")
       PY
 
+  # 6. Debug signing
   - name: Restore Debug Keystore
     run: |
       set -euo pipefail
@@ -114,6 +119,7 @@ steps:
 
       test -s debug.keystore
 
+  # 7. Release signing
   - name: Restore Release Upload Keystore
     env:
       KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -121,20 +127,17 @@ steps:
       set -euo pipefail
 
       if [ -z "${KEYSTORE_BASE64:-}" ]; then
-        echo "::error::Missing KEYSTORE_BASE64 GitHub secret."
+        echo "::error::Missing KEYSTORE_BASE64 secret."
         exit 1
       fi
 
       printf '%s' "$KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
 
-      if [ ! -s my-upload-key.jks ]; then
-        echo "::error::Release keystore is empty."
-        exit 1
-      fi
-
+      test -s my-upload-key.jks
       chmod 600 my-upload-key.jks
 
-  - name: Verify Release Signing Configuration
+  # 8. Verify signing secrets
+  - name: Verify Release Signing
     env:
       STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -143,17 +146,17 @@ steps:
       set -euo pipefail
 
       test -n "${STORE_PASSWORD:-}" || {
-        echo "::error::Missing STORE_PASSWORD secret."
+        echo "::error::STORE_PASSWORD is missing."
         exit 1
       }
 
       test -n "${KEY_PASSWORD:-}" || {
-        echo "::error::Missing KEY_PASSWORD secret."
+        echo "::error::KEY_PASSWORD is missing."
         exit 1
       }
 
       test -n "${KEY_ALIAS:-}" || {
-        echo "::error::Missing KEY_ALIAS secret."
+        echo "::error::KEY_ALIAS is missing."
         exit 1
       }
 
@@ -162,18 +165,21 @@ steps:
         -storepass "$STORE_PASSWORD" \
         -alias "$KEY_ALIAS" > /dev/null
 
-      echo "Release signing keystore and alias verified."
+      echo "Release keystore verified."
 
-  - name: Setup Environment Configuration
+  # 9. Environment
+  - name: Configure Environment
     run: |
       if [ ! -f .env ] && [ -f .env.example ]; then
         cp .env.example .env
       fi
 
-  - name: Run Unit & Robolectric Tests
+  # 10. Unit tests
+  - name: Run Unit and Robolectric Tests
     run: ./gradlew testDebugUnitTest --stacktrace
 
-  - name: Build Debug APK and Signed Release AAB
+  # 11. Build APK and signed AAB
+  - name: Build Debug APK and Release AAB
     env:
       KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
       STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
@@ -181,43 +187,58 @@ steps:
       KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
     run: |
       set -euo pipefail
+
       ./gradlew assembleDebug bundleRelease --stacktrace
 
+  # 12. Verify release bundle signature
+  - name: Verify Release AAB
+    run: |
+      set -euo pipefail
+
+      AAB="app/build/outputs/bundle/release/app-release.aab"
+
+      test -s "$AAB"
+
+      jarsigner -verify -verbose -certs "$AAB"
+
+  # 13. Stage artifacts
   - name: Stage Build Artifacts
     run: |
       set -euo pipefail
+
       mkdir -p ci-artifacts
 
-      DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
-      RELEASE_AAB="app/build/outputs/bundle/release/app-release.aab"
+      cp app/build/outputs/apk/debug/app-debug.apk \
+        ci-artifacts/AudioFactory-debug.apk
 
-      test -s "$DEBUG_APK"
-      test -s "$RELEASE_AAB"
-
-      cp "$DEBUG_APK" ci-artifacts/AudioFactory-debug.apk
-      cp "$RELEASE_AAB" ci-artifacts/AudioFactory-release.aab
+      cp app/build/outputs/bundle/release/app-release.aab \
+        ci-artifacts/AudioFactory-release.aab
 
       echo "Build artifacts:"
       ls -lh ci-artifacts/
 
-  - name: Upload APK and Release AAB
+  # 14. Upload APK and AAB
+  - name: Upload Android Build Artifacts
     uses: actions/upload-artifact@v4
     with:
-      name: audiofactory-android-builds
+      name: AudioFACTORY-Android-Builds
       path: ci-artifacts/*
       if-no-files-found: error
       retention-days: 14
 
+  # 15. Upload test reports
   - name: Upload Test Reports
     if: always()
     uses: actions/upload-artifact@v4
     with:
-      name: audiofactory-test-reports
+      name: AudioFACTORY-Test-Reports
       path: app/build/reports/tests/
       if-no-files-found: ignore
       retention-days: 7
 
+  # 16. Cleanup
   - name: Cleanup Sensitive Files
     if: always()
     run: |
-      rm -f app/google-services.json my-upload-key.jks
+      rm -f app/google-services.json
+      rm -f my-upload-key.jks
