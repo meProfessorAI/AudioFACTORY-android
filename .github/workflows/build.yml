@@ -293,20 +293,26 @@ jobs:
             cp AUDIOFACTORY_V2_RELEASE_AUDIT.md ci-reports/AUDIOFACTORY_V2_RELEASE_AUDIT.md
           fi
 
-          DEBUG_SIZE=$(stat -c%s ci-artifacts/AudioFactory-debug.apk)
-          AAB_SIZE=$(stat -c%s ci-artifacts/AudioFactory-release.aab)
-          MAPPING_SIZE=$(stat -c%s ci-mapping/mapping.txt)
+          python3 - <<'PY'
+          import os
 
-          cat <<EOF > ci-reports/build-validation-report.md
-# AudioFACTORY CI Build Validation Summary
-- **Application**: AudioFACTORY (\`com.audiofactory.app\`)
-- **Version Name**: \`3.0.0\`
-- **Version Code**: \`8\`
-- **Debug APK**: \`AudioFactory-debug.apk\` (${DEBUG_SIZE} bytes)
-- **Release AAB**: \`AudioFactory-release.aab\` (${AAB_SIZE} bytes)
-- **R8 Mapping**: \`mapping.txt\` (${MAPPING_SIZE} bytes)
-- **Signature Verification**: Passed (\`apksigner\` & \`jarsigner\`)
-EOF
+          debug_size = os.path.getsize("ci-artifacts/AudioFactory-debug.apk")
+          aab_size = os.path.getsize("ci-artifacts/AudioFactory-release.aab")
+          mapping_size = os.path.getsize("ci-mapping/mapping.txt")
+
+          report = (
+              "# AudioFACTORY CI Build Validation Summary\n"
+              "- **Application**: AudioFACTORY (`com.audiofactory.app`)\n"
+              "- **Version Name**: `3.0.0`\n"
+              "- **Version Code**: `8`\n"
+              f"- **Debug APK**: `AudioFactory-debug.apk` ({debug_size} bytes)\n"
+              f"- **Release AAB**: `AudioFactory-release.aab` ({aab_size} bytes)\n"
+              f"- **R8 Mapping**: `mapping.txt` ({mapping_size} bytes)\n"
+              "- **Signature Verification**: Passed (`apksigner` & `jarsigner`)\n"
+          )
+          with open("ci-reports/build-validation-report.md", "w", encoding="utf-8") as f:
+              f.write(report)
+          PY
 
           echo "Generated artifacts:"
           ls -lh ci-artifacts/ ci-mapping/ ci-reports/
