@@ -28,7 +28,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +56,9 @@ fun AudioFactoryMainScreen(
     onOpenFilePicker: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams) -> Unit,
     onRequestRecordAudioPermission: (() -> Unit) -> Unit,
     onExitApp: () -> Unit,
+    onStartOAuth: () -> Unit = {},
+    onSignOut: () -> Unit = {},
+    getSessionJsonProvider: () -> String? = { null },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -112,6 +114,9 @@ fun AudioFactoryMainScreen(
             AudioFactoryWebView(
                 webView = webView,
                 downloadManager = downloadManager,
+                onStartOAuth = onStartOAuth,
+                onSignOut = onSignOut,
+                getSessionJsonProvider = getSessionJsonProvider,
                 callback = object : WebViewHostCallback {
                     override fun onProgressChanged(progress: Int) {
                         uiState = uiState.copy(progress = progress)

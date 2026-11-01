@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.audiofactory.app",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:7D:6D:E9:7D:6D:E9:7D:6D:E9:7D:6D:E9:7D:6D:E9:7D:6D:E9:7D:6D:E9:7D:6D:E9:7D:6D:E9:7D:6D",
+        "B3:DF:8D:FF:AF:6A:5F:1F:B2:6F:22:01:38:66:C8:7B:1F:40:AE:0C:70:EE:96:68:30:9F:C7:80:72:FD:0D:FA"
+      ]
+    }
+  }
+]

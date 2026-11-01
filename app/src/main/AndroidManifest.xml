@@ -30,6 +30,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
             android:label="@string/app_name"
@@ -38,7 +39,28 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep link intent filter for Audio Factory web app -->
+
+            <!-- Verified HTTPS Android App Links for backend OAuth return routes -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="audiofactory.vercel.app" android:pathPrefix="/auth/callback" />
+                <data android:scheme="https" android:host="audiofactory.vercel.app" android:pathPrefix="/api/auth/callback" />
+                <data android:scheme="https" android:host="audiofactory.vercel.app" android:pathPrefix="/oauth/callback" />
+                <data android:scheme="https" android:host="audiofactory.app" android:pathPrefix="/auth/callback" />
+                <data android:scheme="https" android:host="audiofactory.app" android:pathPrefix="/api/auth/callback" />
+            </intent-filter>
+
+            <!-- Custom scheme fallback for OAuth callback -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.audiofactory.app" android:host="oauth-callback" />
+            </intent-filter>
+
+            <!-- Deep link intent filter for Audio Factory web app root & general paths -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

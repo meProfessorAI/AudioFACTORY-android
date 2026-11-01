@@ -45,6 +45,9 @@ fun AudioFactoryWebView(
     webView: WebView,
     callback: WebViewHostCallback,
     downloadManager: AudioFactoryDownloadManager,
+    onStartOAuth: () -> Unit,
+    onSignOut: () -> Unit,
+    getSessionJsonProvider: () -> String?,
     modifier: Modifier = Modifier
 ) {
     AndroidView(
@@ -85,8 +88,13 @@ fun AudioFactoryWebView(
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                // Register native JS bridges for React application integration (audio blob download & native detection)
-                val nativeBridge = AudioFactoryNativeBridge(downloadManager = downloadManager)
+                // Register native JS bridges for React application integration (audio download, OAuth, & native detection)
+                val nativeBridge = AudioFactoryNativeBridge(
+                    downloadManager = downloadManager,
+                    onStartOAuth = onStartOAuth,
+                    onSignOut = onSignOut,
+                    getSessionJsonProvider = getSessionJsonProvider
+                )
 
                 addJavascriptInterface(nativeBridge, "AudioFactoryNative")
                 addJavascriptInterface(nativeBridge, "AudioFactoryBridge")
@@ -146,6 +154,13 @@ fun AudioFactoryWebView(
                     ): Boolean {
                         val uri = request?.url ?: return false
 
+                        // Google OAuth & backend auth routes: NEVER load inside WebView! Launch in Custom Tabs.
+                        if (AudioFactoryWebPolicy.isGoogleAuthUrl(uri) || AudioFactoryWebPolicy.isBackendAuthInitiation(uri)) {
+                            Log.d("AudioFactoryWebView", "Intercepted OAuth URL navigation ($uri) - routing to Chrome Custom Tabs.")
+                            onStartOAuth()
+                            return true
+                        }
+
                         // Trusted first-party origin: let WebView handle internal navigation
                         if (AudioFactoryWebPolicy.isTrustedOrigin(uri)) {
                             return false
@@ -190,7 +205,7 @@ fun AudioFactoryWebView(
                             url = url ?: AudioFactoryWebPolicy.START_URL
                         )
 
-                        // Inject bridge bridge initialization & blob download hooks
+                        // Inject bridge initialization & fallback contract hooks
                         view?.evaluateJavascript(
                             """
                             (function() {

@@ -45,4 +45,35 @@ object AudioFactoryWebPolicy {
         val scheme = uri.scheme?.lowercase() ?: return false
         return scheme in setOf("https", "http", "mailto", "tel")
     }
+
+    /**
+     * Detects Google OAuth authentication endpoints that MUST NOT load inside WebView.
+     */
+    fun isGoogleAuthUrl(uri: Uri?): Boolean {
+        if (uri == null) return false
+        val host = uri.host?.lowercase() ?: return false
+        val path = uri.path?.lowercase() ?: ""
+
+        if (host == "accounts.google.com" || host.endsWith(".google.com") && host.startsWith("accounts.")) {
+            return true
+        }
+
+        if (path.contains("/o/oauth2/") || path.contains("/signin/oauth")) {
+            return true
+        }
+
+        return false
+    }
+
+    /**
+     * Detects backend authentication initiation routes.
+     */
+    fun isBackendAuthInitiation(uri: Uri?): Boolean {
+        if (uri == null) return false
+        val path = uri.path?.lowercase() ?: ""
+        val provider = uri.getQueryParameter("provider")?.lowercase()
+
+        return (path.startsWith("/auth/login") || path.startsWith("/api/auth/google") || path.startsWith("/api/auth/signin"))
+                && (provider == "google" || path.contains("google"))
+    }
 }
