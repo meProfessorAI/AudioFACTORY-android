@@ -298,8 +298,8 @@ jobs:
           cat <<EOF > ci-reports/build-validation-report.md
           # AudioFACTORY CI Build Validation Summary
           - **Application**: AudioFACTORY (\`com.audiofactory.app\`)
-          - **Version Name**: \`2.0.0\`
-          - **Version Code**: \`7\`
+          - **Version Name**: \`2.5.0\`
+          - **Version Code**: \`8\`
           - **Debug APK**: \`AudioFactory-debug.apk\` ($(stat -c%s ci-artifacts/AudioFactory-debug.apk) bytes)
           - **Release AAB**: \`AudioFactory-release-v2.0.0-v7.aab\` ($(stat -c%s ci-artifacts/AudioFactory-release-v2.0.0-v7.aab) bytes)
           - **R8 Mapping**: \`mapping.txt\` ($(stat -c%s ci-mapping/mapping.txt) bytes)
