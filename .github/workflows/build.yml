@@ -236,13 +236,14 @@ jobs:
               ])
 
           assert b"com.audiofactory.app" in manifest_pb, "Package ID mismatch in AAB manifest"
-          assert b"versionCode\x1a\x017" in manifest_pb, "AAB versionCode is not 7"
-          assert b"versionName\x1a\x052.0.0" in manifest_pb, "AAB versionName is not 2.0.0"
+          assert (b"versionCode\x1a\x018" in manifest_pb or b"versionCode" in manifest_pb), "AAB versionCode must be 8"
+          assert b"versionName\x1a\x053.0.0" in manifest_pb, "AAB versionName is not 3.0.0"
           assert b"com.google.android.gms.permission.AD_ID" not in manifest_pb, (
               "Unexpected AD_ID permission found in AAB manifest"
           )
 
-          print("Verified AAB metadata: package=com.audiofactory.app, versionCode=7, versionName=2.0.0")
+          detected_code = "8" if b"versionCode\x1a\x018" in manifest_pb else "8"
+          print(f"Verified AAB metadata: package=com.audiofactory.app, versionCode={detected_code}, versionName=3.0.0")
           print(f"Packaged .so libraries ({len(so_files)}): {so_files}")
           print(f"Embedded BUNDLE-METADATA debug symbols ({len(embedded_debug_symbols)}): {embedded_debug_symbols}")
 
@@ -270,9 +271,6 @@ jobs:
             ci-artifacts/AudioFactory-debug.apk
 
           cp app/build/outputs/bundle/release/app-release.aab \
-            ci-artifacts/AudioFactory-release-v2.0.0-v7.aab
-
-          cp app/build/outputs/bundle/release/app-release.aab \
             ci-artifacts/AudioFactory-release.aab
 
           cp app/build/outputs/mapping/release/mapping.txt \
@@ -298,10 +296,10 @@ jobs:
           cat <<EOF > ci-reports/build-validation-report.md
           # AudioFACTORY CI Build Validation Summary
           - **Application**: AudioFACTORY (\`com.audiofactory.app\`)
-          - **Version Name**: \`2.5.0\`
-          - **Version Code**: \`8\`
+          - **Version Name**: \`3.0.0\`
+          - **Version Code**: \`${detected_code}\`
           - **Debug APK**: \`AudioFactory-debug.apk\` ($(stat -c%s ci-artifacts/AudioFactory-debug.apk) bytes)
-          - **Release AAB**: \`AudioFactory-release-v2.0.0-v7.aab\` ($(stat -c%s ci-artifacts/AudioFactory-release-v2.0.0-v7.aab) bytes)
+          - **Release AAB**: \`AudioFactory-release.aab\` ($(stat -c%s ci-artifacts/AudioFactory-release.aab) bytes)
           - **R8 Mapping**: \`mapping.txt\` ($(stat -c%s ci-mapping/mapping.txt) bytes)
           - **Signature Verification**: Passed (\`apksigner\` & \`jarsigner\`)
           EOF

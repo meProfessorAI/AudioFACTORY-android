@@ -47,9 +47,9 @@ class AudioFactoryRobolectricTest {
     }
 
     @Test
-    fun `release build config matches v2_0_0 version code 7 source of truth`() {
+    fun `release build config matches v3_0_0 version code 8 source of truth`() {
         assertEquals("com.audiofactory.app", BuildConfig.APPLICATION_ID)
-        assertEquals(7, BuildConfig.VERSION_CODE)
-        assertEquals("2.0.0", BuildConfig.VERSION_NAME)
+        assertEquals(8, BuildConfig.VERSION_CODE)
+        assertEquals("3.0.0", BuildConfig.VERSION_NAME)
     }
 }
