@@ -37,8 +37,6 @@ interface WebViewHostCallback {
     fun onShowFileChooser(filePathCallback: ValueCallback<Array<Uri>>, fileChooserParams: WebChromeClient.FileChooserParams): Boolean
     fun onMicrophonePermissionRequested(request: PermissionRequest)
     fun onExternalUrl(url: String)
-    fun onRequestGoogleSignIn()
-    fun onAuthStatusReceived(status: String, message: String?)
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -87,16 +85,8 @@ fun AudioFactoryWebView(
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                // Register native JS bridges for React application integration
-                val nativeBridge = AudioFactoryNativeBridge(
-                    downloadManager = downloadManager,
-                    onRequestGoogleSignIn = {
-                        callback.onRequestGoogleSignIn()
-                    },
-                    onAuthStatusReceived = { status, message ->
-                        callback.onAuthStatusReceived(status, message)
-                    }
-                )
+                // Register native JS bridges for React application integration (audio blob download & native detection)
+                val nativeBridge = AudioFactoryNativeBridge(downloadManager = downloadManager)
 
                 addJavascriptInterface(nativeBridge, "AudioFactoryNative")
                 addJavascriptInterface(nativeBridge, "AudioFactoryBridge")

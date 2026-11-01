@@ -52,56 +52,7 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
 
-      # 5. Restore and validate Firebase configuration
-      - name: Restore Firebase Configuration
-        env:
-          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
-        run: |
-          set -euo pipefail
-
-          if [ -z "${GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
-            echo "::error::Missing GOOGLE_SERVICES_JSON_BASE64 repository secret."
-            exit 1
-          fi
-
-          mkdir -p app
-
-          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" \
-            | base64 --decode > app/google-services.json
-
-          test -s app/google-services.json
-
-          python3 - <<'PY'
-          import json
-
-          with open("app/google-services.json", encoding="utf-8") as f:
-              config = json.load(f)
-
-          assert config["project_info"]["project_id"] == "audiofactory-eia", (
-              "Firebase project ID does not match audiofactory-eia"
-          )
-
-          matching = [
-              client for client in config["client"]
-              if client["client_info"]["android_client_info"]["package_name"]
-              == "com.audiofactory.app"
-          ]
-
-          assert matching, "Firebase Android package not found"
-
-          web_clients = [
-              oauth
-              for client in matching
-              for oauth in client.get("oauth_client", [])
-              if oauth.get("client_type") == 3
-          ]
-
-          assert web_clients, "Firebase Web OAuth client is missing"
-
-          print("Firebase configuration verified successfully.")
-          PY
-
-      # 6. Restore debug signing key
+      # 5. Restore debug signing key
       - name: Restore Debug Keystore
         run: |
           set -euo pipefail
@@ -333,7 +284,7 @@ jobs:
             cp "$SYMBOLS_ZIP" ci-symbols/native-debug-symbols.zip
             echo "Native debug symbols archive staged."
           else
-            echo "::warning title=Missing Native Debug Symbols Archive::AGP did not generate native-debug-symbols.zip because all 8 bundled .so libraries (libandroidx.graphics.path.so, libdatastore_shared_counter.so) are pre-stripped upstream in Google AndroidX Maven AARs."
+            echo "::warning title=Missing Native Debug Symbols Archive::AGP did not generate native-debug-symbols.zip because the 4 bundled .so libraries (libandroidx.graphics.path.so) are pre-stripped upstream in Google AndroidX Maven AARs."
           fi
 
           if [ -f AUDIOFACTORY_NATIVE_SYMBOLS_AUDIT.md ]; then
@@ -406,10 +357,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # 21. Cleanup sensitive files
+      # 20. Cleanup sensitive files
       - name: Cleanup Sensitive Files
         if: always()
         run: |
-          rm -f app/google-services.json
           rm -f my-upload-key.jks
           rm -f aab-verification.txt

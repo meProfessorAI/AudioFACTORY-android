@@ -17,8 +17,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
-import com.audiofactory.app.auth.AuthManager
 import com.audiofactory.app.data.NetworkConnectivityObserver
 import com.audiofactory.app.policy.AudioFactoryWebPolicy
 import com.audiofactory.app.service.AudioFactoryDownloadManager
@@ -30,13 +28,10 @@ class MainActivity : ComponentActivity() {
     private var sharedWebView: WebView? = null
     private var pendingFilePathCallback: ValueCallback<Array<Uri>>? = null
     private var onPermissionGrantedCallback: (() -> Unit)? = null
-    private lateinit var authManager: AuthManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        authManager = AuthManager(applicationContext)
 
         val webView = WebView(this).also {
             sharedWebView = it
@@ -47,9 +42,6 @@ class MainActivity : ComponentActivity() {
 
         // Load the production Audio Factory URL
         webView.loadUrl(AudioFactoryWebPolicy.START_URL)
-
-        // Attempt silent auto sign-in if credentials exist
-        authManager.attemptAutoSignIn(webView, lifecycleScope)
 
         setContent {
             AudioFactoryTheme {
@@ -147,13 +139,6 @@ class MainActivity : ComponentActivity() {
                             onPermissionGrantedCallback = onGranted
                             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
-                    },
-                    onRequestGoogleSignIn = {
-                        authManager.signInWithGoogle(
-                            activity = this@MainActivity,
-                            webView = webView,
-                            scope = lifecycleScope
-                        )
                     },
                     onExitApp = {
                         finish()

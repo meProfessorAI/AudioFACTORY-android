@@ -4,29 +4,16 @@ import android.webkit.JavascriptInterface
 import com.audiofactory.app.BuildConfig
 import com.audiofactory.app.service.AudioFactoryDownloadManager
 
+/**
+ * Native JavaScript interface exposed to the Audio Factory web client.
+ * Handles client-side audio blob export downloads and native environment detection.
+ * All authentication, sessions, and data operations are handled directly by the web app and Vercel backend.
+ */
 class AudioFactoryNativeBridge(
-    private val downloadManager: AudioFactoryDownloadManager,
-    private val onRequestGoogleSignIn: () -> Unit,
-    private val onAuthStatusReceived: (status: String, message: String?) -> Unit
+    private val downloadManager: AudioFactoryDownloadManager
 ) {
     /**
-     * Web application invokes this method when user taps Google Sign-In inside the web app.
-     */
-    @JavascriptInterface
-    fun requestGoogleSignIn() {
-        onRequestGoogleSignIn()
-    }
-
-    /**
-     * Web application invokes this method to send authentication outcome back to native.
-     */
-    @JavascriptInterface
-    fun onAuthStatus(status: String, message: String?) {
-        onAuthStatusReceived(status, message)
-    }
-
-    /**
-     * Client-side AudioContext blob download bridge.
+     * Client-side AudioContext blob download bridge for audio generation and exports.
      */
     @JavascriptInterface
     fun downloadBlobAudio(base64Data: String, mimeType: String) {

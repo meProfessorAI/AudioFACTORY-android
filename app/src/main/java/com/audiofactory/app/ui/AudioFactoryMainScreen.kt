@@ -62,7 +62,6 @@ fun AudioFactoryMainScreen(
     connectivityObserver: NetworkConnectivityObserver,
     onOpenFilePicker: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams) -> Unit,
     onRequestRecordAudioPermission: (() -> Unit) -> Unit,
-    onRequestGoogleSignIn: () -> Unit,
     onExitApp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -118,7 +117,6 @@ fun AudioFactoryMainScreen(
                         uiState = uiState.copy(error = null)
                         webView.reload()
                     },
-                    onGoogleSignIn = onRequestGoogleSignIn,
                     onShare = {
                         val shareIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
@@ -222,24 +220,6 @@ fun AudioFactoryMainScreen(
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                             context.startActivity(intent)
                         } catch (_: Exception) {}
-                    }
-
-                    override fun onRequestGoogleSignIn() {
-                        onRequestGoogleSignIn()
-                    }
-
-                    override fun onAuthStatusReceived(status: String, message: String?) {
-                        coroutineScope.launch {
-                            val text = when (status) {
-                                "success" -> "Google Authentication Successful"
-                                "failed" -> "Authentication Failed: ${message ?: "Unknown error"}"
-                                "invalid_token" -> "Authentication Error: Invalid Token"
-                                "account_conflict" -> "Account Conflict: Preserved local guest data"
-                                "cancelled" -> "Sign-in cancelled"
-                                else -> message ?: status
-                            }
-                            snackbarHostState.showSnackbar(text)
-                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize()
