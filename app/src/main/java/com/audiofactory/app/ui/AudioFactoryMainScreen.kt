@@ -1,6 +1,5 @@
 package com.audiofactory.app.ui
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -8,20 +7,18 @@ import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -29,23 +26,21 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.audiofactory.app.R
 import com.audiofactory.app.data.NetworkConnectivityObserver
 import com.audiofactory.app.data.WebErrorType
 import com.audiofactory.app.data.WebUiState
 import com.audiofactory.app.policy.AudioFactoryWebPolicy
 import com.audiofactory.app.service.AudioFactoryDownloadManager
 import com.audiofactory.app.ui.components.AboutDialog
-import com.audiofactory.app.ui.components.AudioFactoryTopBar
 import com.audiofactory.app.ui.components.AudioLoadingIndicator
 import com.audiofactory.app.ui.components.ErrorAndOfflineView
 import com.audiofactory.app.ui.components.ExitConfirmDialog
@@ -53,7 +48,6 @@ import com.audiofactory.app.ui.components.MicrophoneRationaleDialog
 import com.audiofactory.app.ui.theme.StudioBackground
 import com.audiofactory.app.ui.theme.StudioBlue
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 @Composable
 fun AudioFactoryMainScreen(
@@ -66,7 +60,6 @@ fun AudioFactoryMainScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var uiState by remember { mutableStateOf(WebUiState()) }
@@ -106,59 +99,8 @@ fun AudioFactoryMainScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = StudioBackground,
-        contentWindowInsets = WindowInsets.statusBars,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                AudioFactoryTopBar(
-                    isNetworkAvailable = uiState.isNetworkAvailable,
-                    isLoading = uiState.isLoading,
-                    onReload = {
-                        uiState = uiState.copy(error = null)
-                        webView.reload()
-                    },
-                    onShare = {
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "Audio Factory AI Studio")
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                "Check out Audio Factory - AI Voice & Audio Studio: ${AudioFactoryWebPolicy.START_URL}"
-                            )
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "Share Audio Factory"))
-                    },
-                    onClearCache = {
-                        webView.clearCache(true)
-                        webView.reload()
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(context.getString(R.string.cache_cleared_message))
-                        }
-                    },
-                    onOpenPrivacy = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AudioFactoryWebPolicy.PRIVACY_URL))
-                            context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    },
-                    onOpenAbout = {
-                        uiState = uiState.copy(showAboutDialog = true)
-                    }
-                )
-
-                // Top subtle loading bar
-                if (uiState.isLoading && uiState.progress in 1..99) {
-                    LinearProgressIndicator(
-                        progress = { uiState.progress / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(2.5.dp),
-                        color = StudioBlue,
-                        trackColor = Color(0xFF1E2330)
-                    )
-                }
-            }
-        }
+        contentWindowInsets = WindowInsets.systemBars,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -166,7 +108,7 @@ fun AudioFactoryMainScreen(
                 .padding(innerPadding)
                 .background(StudioBackground)
         ) {
-            // WebView Layer
+            // WebView Layer - Full-bleed native container for Vercel web application
             AudioFactoryWebView(
                 webView = webView,
                 downloadManager = downloadManager,
@@ -224,6 +166,19 @@ fun AudioFactoryMainScreen(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+
+            // Minimalist subtle loading line at the top during web page transitions
+            if (uiState.isLoading && uiState.progress in 1..99) {
+                LinearProgressIndicator(
+                    progress = { uiState.progress / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.5.dp)
+                        .align(Alignment.TopCenter),
+                    color = StudioBlue,
+                    trackColor = Color.Transparent
+                )
+            }
 
             // Initial loading splash screen
             AnimatedVisibility(
